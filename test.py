@@ -63,6 +63,14 @@ class COCT:
                                 torch.nn.Linear(param['actor_NN_nhid'], param['actor_NN_nhid']), getattr(torch.nn, param['actor_NN_gate'])(),
                                 torch.nn.Linear(param['actor_NN_nhid'], param['z_dim']+1), torch.nn.Softplus())
         
+        self.actor_z_D_mu_target = torch.nn.Sequential(torch.nn.Linear(config['state_dim'], param['actor_NN_nhid']), getattr(torch.nn, param['actor_NN_gate'])(),
+                                torch.nn.Linear(param['actor_NN_nhid'], param['actor_NN_nhid']), getattr(torch.nn, param['actor_NN_gate'])(),
+                                torch.nn.Linear(param['actor_NN_nhid'], param['z_dim']+1))
+        
+        self.actor_z_D_sigma_target = torch.nn.Sequential(torch.nn.Linear(config['state_dim'], param['actor_NN_nhid']), getattr(torch.nn, param['actor_NN_gate'])(),
+                                torch.nn.Linear(param['actor_NN_nhid'], param['actor_NN_nhid']), getattr(torch.nn, param['actor_NN_gate'])(),
+                                torch.nn.Linear(param['actor_NN_nhid'], param['z_dim']+1), torch.nn.Softplus())
+        
         D = Domain(Variable('s',config['state_dim']), Variable('sp',config['state_dim']),
                 Variable('z',param['z_dim']), Variable('z_',param['z_dim']),
                 Variable('T', 1),
@@ -98,11 +106,17 @@ class COCT:
         #           previous option z_
         z_D_mu= self.actor_z_D_mu(state)
         z_D_sigma = self.actor_z_D_sigma(state)
+        z_D_mu_target= self.actor_z_D_mu(state)
+        z_D_sigma_target = self.actor_z_D_sigma(state)
         predictions = { 'beta': 0.*self.beta(torch.cat((state, z_), dim=-1)),
                         'z_mu': z_D_mu[...,:-1],
                         'z_sigma': z_D_sigma[...,:-1],
-                        'D_mu': z_D_mu[...,-1],
-                        'D_sigma': z_D_sigma[..., -1],
+                        'D_mu':  z_D_mu[...,-1],
+                        'D_sigma':  z_D_sigma[..., -1],
+                        'z_mu_target': z_D_mu_target[...,:-1],
+                        'z_sigma_target': z_D_sigma_target[...,:-1],
+                        'D_mu_target': z_D_mu_target[...,-1],
+                        'D_sigma_target': z_D_sigma_target[..., -1],
                         # 'omega': self.z2omega( z_D[...,:-1] ),
                         }
         return predictions
@@ -128,12 +142,13 @@ class COCT:
 
         new_movementPs = new_movementPs + (TPs==1) # newmovement or T
 
-        zp_dist = torch.distributions.Normal(predictions['z_mu'], predictions['z_sigma']+1e-4)
+        zp_dist = torch.distributions.Normal(predictions['z_mu_target'], predictions['z_sigma_target']+1e-4)
         
-        Dp_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
+        Dp_dist = torch.distributions.Normal(predictions['D_mu_target'], predictions['D_sigma_target']+1e-4)
 
         ZPs = Zs * (new_movementPs==0) + (new_movementPs==1) * zp_dist.sample()
-        
+        ZPs = self.scale_action(ZPs)
+
         DPs = Ds * (new_movementPs==0) + (new_movementPs==1) * Dp_dist.sample().reshape(-1,1)**2
 
         TauPs = (Taus + ds) * (new_movementPs==0) + 0 * (new_movementPs==1)
@@ -142,9 +157,10 @@ class COCT:
         
         target_Qs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.target_critic(SPs_ZPs_TauPs_DPs)
         current_Qs = self.critic(Ss_Zs_Taus_Ds)
-        target_Vs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.value(SPs)
-        current_Vs = self.value(Ss)
-        value_loss = ((current_Vs - target_Vs.detach())**2).mean()
+        # target_Vs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.value(SPs)
+
+        current_Vs = self.value(SPs)
+        value_loss = ((current_Vs - self.target_critic(SPs_ZPs_TauPs_DPs).detach())**2).mean()
 
         critic_loss = ((current_Qs - target_Qs.detach())**2).mean()
         self.critic_opt.zero_grad()
@@ -169,6 +185,8 @@ class COCT:
         # high-policy loss
         z_dist = torch.distributions.Normal(predictions['z_mu'], predictions['z_sigma']+1e-4)
         Zs = z_dist.rsample()
+        Zs = self.scale_action(Zs)
+
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs, 0*Ds, Ds), dim=1)
         current_Qs_z = self.critic(Ss_Zs_Taus_Ds)
         z_loss = - k * current_Qs_z
@@ -207,6 +225,14 @@ class COCT:
         c_loss = self.update_critic(data)
        
         self.soft_update_params(self.critic, self.target_critic, tau = 0.01)
+        self.soft_update_params(self.actor_z_D_mu, self.actor_z_D_mu_target, tau = 0.01)
+        self.soft_update_params(self.actor_z_D_sigma, self.actor_z_D_sigma_target, tau = 0.01)
+        
+        if self.total_steps % 2000 == 1000:
+            D_values = self.RB.get_full()['D'][-1000:].reshape(-1)
+            print(D_values)
+            writer.add_histogram('Duration hist', D_values, global_step = 0*self.total_steps)
+        
         if self.total_steps % 2 == 0:
             # z_loss, D_loss, beta_loss = self.update_actors(data)
             z_loss = D_loss = beta_loss = 0
@@ -246,6 +272,9 @@ class COCT:
         # plt.colorbar()
         # ax.set_title('surface')
         plt.savefig('value.png')
+
+    def scale_action(self,a):
+        return 2 * torch.tanh(a)
 
 if __name__ == '__main__':
 
@@ -306,7 +335,7 @@ if __name__ == '__main__':
                 # sample z
                 z_dist = torch.distributions.Normal(predictions['z_mu'], predictions['z_sigma']+1e-4)
                 z = z_dist.rsample()
-
+                z = agent.scale_action(z)
                 # sample duration 
                 # should be positive
                 D_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
@@ -332,8 +361,9 @@ if __name__ == '__main__':
             writer.add_scalars('timings', {'T':T.detach().numpy(),
                                             'D': D.detach().numpy(),
                                             'tau': tau,
-                                            'z_sigma': predictions['z_sigma'][0]}, agent.total_steps, walltime=agent.real_t)
-            
+                                            }, agent.total_steps, walltime=agent.real_t)
+            writer.add_scalars('action', {'z_mu': predictions['z_mu_target'][0],
+                                            'z_sigma': predictions['z_sigma_target'][0]}, agent.total_steps, walltime=agent.real_t)
             if agent.total_steps % 1000 == 0:
                 agent.test_critic()
             if agent.RB.real_size > 1 * config['param']['batch_size']:
@@ -352,7 +382,7 @@ if __name__ == '__main__':
             tau += d
             agent.real_t += d
             S = torch.tensor(sp, dtype=torch.float32)
-
+            
             if tau >= D:
                 new_movement = True
             
