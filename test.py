@@ -7,15 +7,19 @@ import argparse
 import yaml
 import matplotlib.pyplot as plt
 from dataset import Variable, Domain, RLDataset
-import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import time
 from mpl_toolkits import mplot3d
 from matplotlib import cm
 
 # Writer will output to ./runs/ directory by default
-writer = SummaryWriter(log_dir='results/')
-
+parser = argparse.ArgumentParser()
+parser.add_argument('--ID',default=0,type=int, help='param ID ')
+parser.add_argument('--config',default='0',type=str, help='config file name')
+parser.add_argument('--result_path',default='0',type=str, help='result folder path')
+args = parser.parse_args()
+ID = args.ID
+writer = SummaryWriter(log_dir='results_{}/'.format(ID))
 
 class COCT_network(torch.nn.Module):
     def __init__(self) -> None:
@@ -111,12 +115,12 @@ class COCT:
         predictions = { 'beta': 0.*self.beta(torch.cat((state, z_), dim=-1)),
                         'z_mu': z_D_mu[...,:-1],
                         'z_sigma': z_D_sigma[...,:-1],
-                        'D_mu':  z_D_mu[...,-1],
-                        'D_sigma':  z_D_sigma[..., -1],
+                        'D_mu':  -0.5 + z_D_mu[...,-1],
+                        'D_sigma':  0.5 * z_D_sigma[..., -1],
                         'z_mu_target': z_D_mu_target[...,:-1],
                         'z_sigma_target': z_D_sigma_target[...,:-1],
-                        'D_mu_target': z_D_mu_target[...,-1],
-                        'D_sigma_target': z_D_sigma_target[..., -1],
+                        'D_mu_target': -0.5 + z_D_mu_target[...,-1],
+                        'D_sigma_target': 0.5 * z_D_sigma_target[..., -1],
                         # 'omega': self.z2omega( z_D[...,:-1] ),
                         }
         return predictions
@@ -141,15 +145,15 @@ class COCT:
         new_movementPs = ((Taus + self.dt) >= Ds)
 
         new_movementPs = new_movementPs + (TPs==1) # newmovement or T
-
+        new_movementPs = new_movementPs * 1.
+        # print(new_movementPs)
         zp_dist = torch.distributions.Normal(predictions['z_mu_target'], predictions['z_sigma_target']+1e-4)
         
         Dp_dist = torch.distributions.Normal(predictions['D_mu_target'], predictions['D_sigma_target']+1e-4)
 
-        ZPs = Zs * (new_movementPs==0) + (new_movementPs==1) * zp_dist.sample()
-        ZPs = self.scale_action(ZPs)
+        ZPs = Zs * (new_movementPs==0) + (new_movementPs==1) * self.scale_action(zp_dist.sample())
 
-        DPs = Ds * (new_movementPs==0) + (new_movementPs==1) * Dp_dist.sample().reshape(-1,1)**2
+        DPs = Ds * (new_movementPs==0) + (new_movementPs==1) * (torch.nn.functional.softplus(Dp_dist.sample().reshape(-1,1)+ continuous_env.dt))
 
         TauPs = (Taus + ds) * (new_movementPs==0) + 0 * (new_movementPs==1)
         SPs_ZPs_TauPs_DPs = torch.cat((SPs,ZPs,TauPs, DPs), dim=1)
@@ -193,7 +197,8 @@ class COCT:
                
         # duration loss
         D_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
-        Ds = (D_dist.rsample()**2).reshape(-1,1)
+        Ds = (D_dist.rsample()).reshape(-1,1)
+        Ds = torch.nn.functional.softplus(Ds)+ continuous_env.dt
         Zs = torch.tensor(data['z'], dtype=torch.float32)
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs,(0*Ds).detach(), Ds), dim=1)
         current_Qs_D = self.critic(Ss_Zs_Taus_Ds)
@@ -228,12 +233,12 @@ class COCT:
         self.soft_update_params(self.actor_z_D_mu, self.actor_z_D_mu_target, tau = 0.01)
         self.soft_update_params(self.actor_z_D_sigma, self.actor_z_D_sigma_target, tau = 0.01)
         
-        if self.total_steps % 2000 == 1000:
-            D_values = self.RB.get_full()['D'][-1000:].reshape(-1)
-            print(D_values)
-            writer.add_histogram('Duration hist', D_values, global_step = 0*self.total_steps)
+        if self.total_steps % 10000 == 5000:
+            D_values = self.RB.get_full()['D'][-5000:].reshape(-1)
+            # print(D_values)
+            writer.add_histogram('Duration hist', D_values, global_step = self.total_steps)
         
-        if self.total_steps % 2 == 0:
+        if self.total_steps % 2 == 0 and self.total_steps > 10000:
             # z_loss, D_loss, beta_loss = self.update_actors(data)
             z_loss = D_loss = beta_loss = 0
             writer.add_scalars('losses', {'critic':c_loss,
@@ -247,11 +252,38 @@ class COCT:
                                     (1 - tau) * target_param.data)
 
     def test_critic(self):
+        Z = torch.linspace(-2, 2, 100)
+        D = torch.linspace(0, 2, 100)
+        
+        Z_,D_ = torch.meshgrid([Z,D])
+        Z_ = Z_.unsqueeze(-1)
+        D_ = D_.unsqueeze(-1)
+        T = 0. * D_
+        S = torch.cat([ 0. * Z_, 1. + 0. * Z_, 0. * Z_],dim=-1)
+        print(S.shape,Z_.shape,T.shape,D_.shape)
+        SZTD = torch.cat((S,Z_,T,D_),dim=-1)
+        Y = self.critic(SZTD).squeeze(-1)
+        Z_ = Z_.squeeze(-1)
+        D_ = D_.squeeze(-1)
+        fig = plt.figure()
+        # ax = plt.axes(projection='3d')
+        # ax.plot_surface(Theta.detach().numpy(), Theta_dot.detach().numpy(), Z.detach().numpy(),
+        #         cmap=cm.coolwarm,linewidth=0, antialiased=False)
+        # plt.imshow(Z.detach().numpy(), cmap='viridis')
+        plt.pcolormesh(Z_.detach().numpy(), D_.detach().numpy(), Y.detach().numpy())# cmap='RdBu', vmin=Z.detach().numpy().min, vmax=Z.detach().numpy().max())
+        plt.colorbar()
+        plt.axis([Z_.detach().numpy().min(), Z_.detach().numpy().max(), D_.detach().numpy().min(), D_.detach().numpy().max()])
+        # plt.colorbar()
+        # ax.set_title('surface')
+        plt.savefig('critic.png')
+        plt.close()
+
+
+    def test_value(self):
         # test for pendulum
         theta = torch.linspace(-torch.pi, torch.pi, 100)
         theta_dot = torch.linspace(-8., 8., 100)
         
-
         Theta, Theta_dot = torch.meshgrid([theta, theta_dot])
         Theta = Theta.unsqueeze(-1)
         Theta_dot = Theta_dot.unsqueeze(-1)
@@ -272,20 +304,19 @@ class COCT:
         # plt.colorbar()
         # ax.set_title('surface')
         plt.savefig('value.png')
+        plt.close()
 
     def scale_action(self,a):
         return 2 * torch.tanh(a)
+
+
 
 if __name__ == '__main__':
 
     fig, axs = plt.subplots(3)
 
     
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--ID',default=0,type=int, help='param ID ')
-    parser.add_argument('--config',default='0',type=str, help='config file name')
-    parser.add_argument('--result_path',default='0',type=str, help='result folder path')
-    args = parser.parse_args()
+    
 
     run_ID = args.ID
     cfg_path = args.config
@@ -340,7 +371,7 @@ if __name__ == '__main__':
                 # should be positive
                 D_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
                 
-                D = ( D_dist.rsample() )**2
+                D = torch.nn.functional.softplus( D_dist.rsample() ) + continuous_env.dt
                 tau = 0.
                 new_movement = False
                 # sample movement omega
@@ -366,6 +397,7 @@ if __name__ == '__main__':
                                             'z_sigma': predictions['z_sigma_target'][0]}, agent.total_steps, walltime=agent.real_t)
             if agent.total_steps % 1000 == 0:
                 agent.test_critic()
+                agent.test_value()
             if agent.RB.real_size > 1 * config['param']['batch_size']:
                 agent.update()
 

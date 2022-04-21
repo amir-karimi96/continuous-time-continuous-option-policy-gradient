@@ -9,7 +9,7 @@ param:
   actor_lr: 0.0001
   actor_opt: Adam
   critic_NN_gate: ReLU
-  critic_NN_nhid: 64
+  critic_NN_nhid: 128
   critic_lr: 0.001
   critic_opt: Adam
   beta_NN_gate: Tanh
