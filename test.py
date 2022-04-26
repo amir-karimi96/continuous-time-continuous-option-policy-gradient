@@ -1,4 +1,5 @@
 # actor critic continuous option continuous time 
+from typing_extensions import Self
 import torch 
 import numpy as np
 from env_wrapper import  D2C, Env_test
@@ -105,6 +106,15 @@ class COCT:
 
         self.z2omega = lambda x: x
 
+    def get_action_z(self, mu_z, sigma_z):
+        z = torch.distributions.Normal(mu_z, sigma_z+1e-4).rsample()
+        z = self.scale_action(z)
+        return z
+    def get_duration(self, mu_D, sigma_D):
+        D = torch.distributions.Normal(mu_D, sigma_D+1e-4).rsample()
+        D = torch.nn.functional.softplus(D)+ continuous_env.dt
+        return D
+
     def step(self, state, z_):
         # inputs:   current state
         #           previous option z_
@@ -147,20 +157,17 @@ class COCT:
         new_movementPs = new_movementPs + (TPs==1) # newmovement or T
         new_movementPs = new_movementPs * 1.
         # print(new_movementPs)
-        zp_dist = torch.distributions.Normal(predictions['z_mu_target'], predictions['z_sigma_target']+1e-4)
-        
-        Dp_dist = torch.distributions.Normal(predictions['D_mu_target'], predictions['D_sigma_target']+1e-4)
+    
+        ZPs = Zs * (new_movementPs==0) + (new_movementPs==1) * self.get_action_z(predictions['z_mu_target'], predictions['z_sigma_target']+1e-4) 
 
-        ZPs = Zs * (new_movementPs==0) + (new_movementPs==1) * self.scale_action(zp_dist.sample())
-
-        DPs = Ds * (new_movementPs==0) + (new_movementPs==1) * (torch.nn.functional.softplus(Dp_dist.sample().reshape(-1,1)+ continuous_env.dt))
+        DPs = Ds * (new_movementPs==0) + (new_movementPs==1) * self.get_duration(predictions['D_mu_target'], predictions['D_sigma_target']+1e-4).reshape(-1,1)
 
         TauPs = (Taus + ds) * (new_movementPs==0) + 0 * (new_movementPs==1)
         SPs_ZPs_TauPs_DPs = torch.cat((SPs,ZPs,TauPs, DPs), dim=1)
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs,Taus, Ds), dim=1)
         
         target_Qs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.target_critic(SPs_ZPs_TauPs_DPs)
-        current_Qs = self.critic(Ss_Zs_Taus_Ds)
+        current_Qs = self.critic(Ss_Zs_Taus_Ds.detach())
         # target_Vs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.value(SPs)
 
         current_Vs = self.value(SPs)
@@ -187,18 +194,16 @@ class COCT:
         k =  (1-q) + q * predictions['beta'].detach()
         
         # high-policy loss
-        z_dist = torch.distributions.Normal(predictions['z_mu'], predictions['z_sigma']+1e-4)
-        Zs = z_dist.rsample()
-        Zs = self.scale_action(Zs)
+        Zs = self.get_action_z(predictions['z_mu'], predictions['z_sigma'])
+       
 
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs, 0*Ds, Ds), dim=1)
         current_Qs_z = self.critic(Ss_Zs_Taus_Ds)
         z_loss = -  k * current_Qs_z
                
         # duration loss
-        D_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
-        Ds = (D_dist.rsample()).reshape(-1,1)
-        Ds = torch.nn.functional.softplus(Ds)+ continuous_env.dt
+        Ds = self.get_duration(predictions['D_mu'], predictions['D_sigma']).reshape(-1,1)
+        
         Zs = torch.tensor(data['z'], dtype=torch.float32)
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs,(0*Ds).detach(), Ds), dim=1)
         current_Qs_D = self.critic(Ss_Zs_Taus_Ds)
@@ -315,7 +320,13 @@ class COCT:
         plt.close()
 
     def plot_policy(self):
-        States = torch.linspace(-10, 10)
+        States = torch.linspace(-2.5, 2.5,100).reshape(-1,1)
+        predictions = self.step(States, States*0)
+        Y = self.get_action_z(predictions['z_mu'], predictions['z_sigma'])
+        fig = plt.figure()
+        plt.plot(States.detach().numpy(), Y.detach().numpy())
+        plt.savefig('policy.png')
+        plt.close()
         
     def scale_action(self,a):
         return 2 * torch.tanh(a)
@@ -375,14 +386,11 @@ if __name__ == '__main__':
             
             if new_movement or T :
                 # sample z
-                z_dist = torch.distributions.Normal(predictions['z_mu'], predictions['z_sigma']+1e-4)
-                z = z_dist.rsample()
-                z = agent.scale_action(z)
+                z = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
                 # sample duration 
                 # should be positive
-                D_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
-                
-                D = torch.nn.functional.softplus( D_dist.rsample() ) + continuous_env.dt
+                D= agent.get_duration(predictions['D_mu'], predictions['D_sigma'])
+                # print(D)
                 tau = 0.
                 r_newmovement = -1 * 0.05
                 new_movement = False
@@ -392,7 +400,7 @@ if __name__ == '__main__':
             d = min((D-tau).detach().numpy(), agent.dt)
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
-            R -= 0.03/D.detach().numpy()
+            # R -= 0.03/D.detach().numpy()
             # R += r_newmovement
             r_newmovement = 0
             agent.RB.notify(s=S.detach().numpy(), sp=sp, r=R, done=done, T=T,
@@ -413,6 +421,7 @@ if __name__ == '__main__':
             if agent.total_steps % 1000 == 0 :
                 # agent.test_critic()
                 agent.plot_value()
+                agent.plot_policy()
             if agent.RB.real_size > 1 * config['param']['batch_size']:
                 agent.update()
 
