@@ -51,8 +51,8 @@ class D2C:
 
         return self.env.reset()
 
-    def get_continuous_reward(self, r, dt):
-        return r * np.exp(- self.rho * dt) * self.dt
+    def get_continuous_reward(self, r, start_t, dt):
+        return r/self.rho * (np.exp(-self.rho * start_t) - np.exp(-self.rho*(start_t + dt)))
 
     def step(self, A, duration ):
         ### inputs: A is the action (high or low) to be repeated
@@ -63,22 +63,22 @@ class D2C:
         R = 0
         Info = {'rewards':[]}
         done = False
-        duration = max(duration ,self.dt)
+        # duration = max(duration ,self.dt)
         
-        actual_duration = int(duration / self.dt)
-        for i in range(actual_duration):
+        integration_steps = int(duration / self.dt)
+        for i in range(integration_steps):
             
             a = self.low_level_func(A, i * self.dt, duration)
             s, r, done, info = self.env.step(a)
             # self.env.render()
-            R += self.get_continuous_reward(r, (i+1) * self.dt) 
+            R += self.get_continuous_reward(r, i * self.dt, self.dt) 
             Info['rewards'].append(r)
             if done:
                 return (s, R, done, Info)
-        d = duration - actual_duration * self.dt
+        d = duration - integration_steps * self.dt
         if d > 0:
-            a = self.low_level_func(A, actual_duration * self.dt, duration)
+            a = self.low_level_func(A, integration_steps * self.dt, duration)
             s, r, done, info = self.env.step(a, d)
-            R += self.get_continuous_reward(r, (actual_duration+1) * self.dt)
+            R += self.get_continuous_reward(r, integration_steps * self.dt, d)
             Info['rewards'].append(r)
         return (s, R, done, Info)

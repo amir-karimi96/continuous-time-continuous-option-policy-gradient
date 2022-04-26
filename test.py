@@ -125,12 +125,12 @@ class COCT:
         predictions = { 'beta': 0.*self.beta(torch.cat((state, z_), dim=-1)),
                         'z_mu': z_D_mu[...,:-1],
                         'z_sigma': z_D_sigma[...,:-1],
-                        'D_mu':  -15 + 0*z_D_mu[...,-1],
-                        'D_sigma':  0. * z_D_sigma[..., -1],
+                        'D_mu':   z_D_mu[...,-1],
+                        'D_sigma':  z_D_sigma[..., -1],
                         'z_mu_target': z_D_mu_target[...,:-1],
                         'z_sigma_target': z_D_sigma_target[...,:-1],
-                        'D_mu_target': -15 + 0*z_D_mu_target[...,-1],
-                        'D_sigma_target': 0. * z_D_sigma_target[..., -1],
+                        'D_mu_target': z_D_mu_target[...,-1],
+                        'D_sigma_target': z_D_sigma_target[..., -1],
                         # 'omega': self.z2omega( z_D[...,:-1] ),
                         }
         return predictions
@@ -327,6 +327,15 @@ class COCT:
         plt.plot(States.detach().numpy(), Y.detach().numpy())
         plt.savefig('policy.png')
         plt.close()
+    
+    def plot_duration(self):
+        States = torch.linspace(-2.5, 2.5,100).reshape(-1,1)
+        predictions = self.step(States, States*0)
+        Y = self.get_duration(predictions['D_mu'], predictions['D_sigma'])
+        fig = plt.figure()
+        plt.plot(States.detach().numpy(), Y.detach().numpy())
+        plt.savefig('duration.png')
+        plt.close()
         
     def scale_action(self,a):
         return 2 * torch.tanh(a)
@@ -422,6 +431,7 @@ if __name__ == '__main__':
                 # agent.test_critic()
                 agent.plot_value()
                 agent.plot_policy()
+                agent.plot_duration()
             if agent.RB.real_size > 1 * config['param']['batch_size']:
                 agent.update()
 
