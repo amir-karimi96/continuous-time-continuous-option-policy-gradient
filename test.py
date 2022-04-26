@@ -1,7 +1,7 @@
 # actor critic continuous option continuous time 
 import torch 
 import numpy as np
-from env_wrapper import  D2C
+from env_wrapper import  D2C, Env_test
 import gym
 import argparse
 import yaml
@@ -115,12 +115,12 @@ class COCT:
         predictions = { 'beta': 0.*self.beta(torch.cat((state, z_), dim=-1)),
                         'z_mu': z_D_mu[...,:-1],
                         'z_sigma': z_D_sigma[...,:-1],
-                        'D_mu':  -0.5 + z_D_mu[...,-1],
-                        'D_sigma':  0.5 * z_D_sigma[..., -1],
+                        'D_mu':  -15 + 0*z_D_mu[...,-1],
+                        'D_sigma':  0. * z_D_sigma[..., -1],
                         'z_mu_target': z_D_mu_target[...,:-1],
                         'z_sigma_target': z_D_sigma_target[...,:-1],
-                        'D_mu_target': -0.5 + z_D_mu_target[...,-1],
-                        'D_sigma_target': 0.5 * z_D_sigma_target[..., -1],
+                        'D_mu_target': -15 + 0*z_D_mu_target[...,-1],
+                        'D_sigma_target': 0. * z_D_sigma_target[..., -1],
                         # 'omega': self.z2omega( z_D[...,:-1] ),
                         }
         return predictions
@@ -193,7 +193,7 @@ class COCT:
 
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs, 0*Ds, Ds), dim=1)
         current_Qs_z = self.critic(Ss_Zs_Taus_Ds)
-        z_loss = - k * current_Qs_z
+        z_loss = -  k * current_Qs_z
                
         # duration loss
         D_dist = torch.distributions.Normal(predictions['D_mu'], predictions['D_sigma']+1e-4)
@@ -221,7 +221,8 @@ class COCT:
         loss.backward()
         self.actor_opt.step()
         # self.beta_opt.step()
-
+        writer.add_scalars('z_D_batch_size', {'critic':(1-q).sum().detach(),
+                                                }, self.total_steps, walltime=self.real_t)
         return (z_loss.mean().detach().numpy() , D_loss.mean().detach().numpy() , beta_loss.mean().detach().numpy() )
 
     def update(self):
@@ -238,9 +239,9 @@ class COCT:
             # print(D_values)
             writer.add_histogram('Duration hist', D_values, global_step = self.total_steps)
         
-        if self.total_steps % 2 == 0 and self.total_steps > 10000:
-            # z_loss, D_loss, beta_loss = self.update_actors(data)
-            z_loss = D_loss = beta_loss = 0
+        if self.total_steps % 2 == 0 :#and self.total_steps > 1000:
+            z_loss, D_loss, beta_loss = self.update_actors(data)
+            # z_loss = D_loss = beta_loss = 0
             writer.add_scalars('losses', {'critic':c_loss,
                                                 'actor_z': z_loss,
                                                 'actor_D': D_loss,
@@ -275,10 +276,17 @@ class COCT:
         plt.axis([Z_.detach().numpy().min(), Z_.detach().numpy().max(), D_.detach().numpy().min(), D_.detach().numpy().max()])
         # plt.colorbar()
         # ax.set_title('surface')
-        plt.savefig('critic.png')
+        plt.savefig('critic_{}.png'.format(ID))
         plt.close()
 
-
+    def plot_value(self):
+        X = torch.linspace(-10,10,100).reshape(-1,1)
+        Y = self.value(X)
+        fig = plt.figure()
+        plt.plot(X.detach().numpy(), Y.detach().numpy())
+        plt.savefig('value_{}.png'.format(ID))
+        plt.close()
+        
     def test_value(self):
         # test for pendulum
         theta = torch.linspace(-torch.pi, torch.pi, 100)
@@ -303,13 +311,17 @@ class COCT:
         plt.axis([Theta.detach().numpy().min(), Theta.detach().numpy().max(), Theta_dot.detach().numpy().min(), Theta_dot.detach().numpy().max()])
         # plt.colorbar()
         # ax.set_title('surface')
-        plt.savefig('value.png')
+        plt.savefig('value_{}.png'.format(ID))
         plt.close()
 
+    def plot_policy(self):
+        States = torch.linspace(-10, 10)
+        
     def scale_action(self,a):
         return 2 * torch.tanh(a)
 
-
+def evaluate():
+    pass
 
 if __name__ == '__main__':
 
@@ -326,11 +338,9 @@ if __name__ == '__main__':
         config = yaml.full_load(file)
 
     param = config['param']
-
-
-    param = config['param']
     
-    env = gym.make(param['env'])
+    # env = gym.make(param['env'])
+    env = Env_test()
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
     config['state_dim'] = state_dim
@@ -344,7 +354,7 @@ if __name__ == '__main__':
     
 
     num_ep = 10000
-    continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x)
+    continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho)
     t = 0.
     Returns = []
     for e in range(num_ep):
@@ -356,6 +366,7 @@ if __name__ == '__main__':
         D_ = torch.tensor([0.])
 
         new_movement = 1
+        r_newmovement = 0
         undiscounted_rewards = []
         while True :
             predictions = agent.step(S,z_)
@@ -373,6 +384,7 @@ if __name__ == '__main__':
                 
                 D = torch.nn.functional.softplus( D_dist.rsample() ) + continuous_env.dt
                 tau = 0.
+                r_newmovement = -1 * 0.05
                 new_movement = False
                 # sample movement omega
                 omega = agent.z2omega(z) # TO DO add stochasticity
@@ -380,6 +392,9 @@ if __name__ == '__main__':
             d = min((D-tau).detach().numpy(), agent.dt)
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
+            R -= 0.03/D.detach().numpy()
+            # R += r_newmovement
+            r_newmovement = 0
             agent.RB.notify(s=S.detach().numpy(), sp=sp, r=R, done=done, T=T,
                         z=z.detach().numpy(), z_=z_.detach().numpy(), 
                         tau=tau, tau_=tau_, D=D.detach().numpy(), D_=D_.detach().numpy(), d=d)
@@ -395,9 +410,9 @@ if __name__ == '__main__':
                                             }, agent.total_steps, walltime=agent.real_t)
             writer.add_scalars('action', {'z_mu': predictions['z_mu_target'][0],
                                             'z_sigma': predictions['z_sigma_target'][0]}, agent.total_steps, walltime=agent.real_t)
-            if agent.total_steps % 1000 == 0:
-                agent.test_critic()
-                agent.test_value()
+            if agent.total_steps % 1000 == 0 :
+                # agent.test_critic()
+                agent.plot_value()
             if agent.RB.real_size > 1 * config['param']['batch_size']:
                 agent.update()
 
