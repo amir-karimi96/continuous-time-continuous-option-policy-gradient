@@ -1,5 +1,6 @@
 import numpy as np
 from gym import spaces
+
 class Env_test:
     def __init__(self) -> None:
         # self.s = 2 + np.random.rand(1)
@@ -8,26 +9,30 @@ class Env_test:
         self.observation_space = spaces.Box(low=-10., high=10., shape=(1,), dtype=np.float32)
 
     def reset(self,):
-        self.counter = 0
+        self.time = 0
         self.goal = np.array([1.])
         self.s = np.array([0.])
         # return np.concatenate((self.goal, self.s))
         return self.s
 
     def step(self, a, d=None):
-        self.counter += 1
+        
         if d is not None:
             self.s += a * d
+            self.time += d
         else:
             self.s += a * self.dt
+            self.time += self.dt
         # print(self.t)
         # s = np.concatenate((self.goal, self.t))
         
         r = -((self.goal - self.s)**2).sum()
         done = False
-        if self.counter == 50:
+        if self.time >= 5:
             done = True
         info = {}
+        # print('r: ', r)
+        # print(self.time, self.s, d, a * self.dt)
         return self.s ,r,done,info
 
 class D2C:
@@ -61,7 +66,8 @@ class D2C:
         ###          S is the state at the end of continuous time-step
         ###          Done is true if terminal happend 
         R = 0
-        Info = {'rewards':[]}
+        Info = {'rewards':[],
+                'durations': []}
         done = False
         # duration = max(duration ,self.dt)
         
@@ -73,6 +79,7 @@ class D2C:
             # self.env.render()
             R += self.get_continuous_reward(r, i * self.dt, self.dt) 
             Info['rewards'].append(r)
+            Info['durations'].append(self.dt)
             if done:
                 return (s, R, done, Info)
         d = duration - integration_steps * self.dt
@@ -81,4 +88,5 @@ class D2C:
             s, r, done, info = self.env.step(a, d)
             R += self.get_continuous_reward(r, integration_steps * self.dt, d)
             Info['rewards'].append(r)
+            Info['durations'].append(d)
         return (s, R, done, Info)
