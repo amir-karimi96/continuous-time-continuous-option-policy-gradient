@@ -1,5 +1,35 @@
+import imp
 import numpy as np
 from gym import spaces
+from gym.envs.classic_control.pendulum import PendulumEnv
+
+class CT_pendulum(PendulumEnv):
+    def __init__(self, g=10):
+        super().__init__(g)
+        self.ep_time = 0
+        print(self.dt)
+
+    def reset(self):
+        self.dt = 0.05
+        self.ep_time = 0
+        return super().reset()
+
+    def step(self, u, d=None):
+        if d is not None:
+            self.dt = d
+        else:
+            self.dt = 0.05
+        self.ep_time += self.dt
+        
+
+        s,r,done,info = super().step(u)
+
+        if self.ep_time >= 10:
+            done = True
+
+        return s,r,done,info
+        
+
 
 class Env_test:
     def __init__(self) -> None:
