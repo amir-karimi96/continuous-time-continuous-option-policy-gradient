@@ -1,7 +1,7 @@
 # actor critic continuous option continuous time 
 import torch 
 import numpy as np
-from env_wrapper import  D2C, Env_test
+from env_wrapper import  D2C, Env_test, CT_pendulum
 import gym
 import argparse
 import yaml
@@ -11,18 +11,30 @@ from torch.utils.tensorboard import SummaryWriter
 import time
 from mpl_toolkits import mplot3d
 from matplotlib import cm
+import pickle
 
 # Writer will output to ./runs/ directory by default
 parser = argparse.ArgumentParser()
 parser.add_argument('--ID',default=0,type=int, help='param ID ')
 parser.add_argument('--config',default='0',type=str, help='config file name')
 parser.add_argument('--result_path',default='0',type=str, help='result folder path')
+
 args = parser.parse_args()
-ID = args.ID
-writer = SummaryWriter(log_dir='results_{}/'.format(ID))
+run_ID = args.ID
+cfg_path = args.config
+torch.manual_seed(run_ID * 1000) 
+# print(cfg_path)
+result_path = args.result_path
+with open(cfg_path) as file:
+    config = yaml.full_load(file)
+
+param = config['param']
+config_name = 'config_{}'.format(config['param_ID'])
+
+writer = SummaryWriter(log_dir='{}/{}/result_{}'.format(result_path,config_name, run_ID))
 
 def neural_net(input_size, output_size, num_hidden_layer, hidden_layer_size, activation):
-    NN = torch.nn.Sequential()
+    NN = []
     if num_hidden_layer > 0:
         NN.append(torch.nn.Linear(input_size, hidden_layer_size))
         NN.append(getattr(torch.nn, activation)())
@@ -32,6 +44,7 @@ def neural_net(input_size, output_size, num_hidden_layer, hidden_layer_size, act
         NN.append(torch.nn.Linear(hidden_layer_size, output_size))
     else:
         NN.append(torch.nn.Linear(input_size, output_size))
+    NN = torch.nn.Sequential(*NN)
     return NN
 
 class COCT_actor_network(torch.nn.Module):
@@ -47,20 +60,20 @@ class COCT_actor_network(torch.nn.Module):
         self.actor_D_mu = neural_net(input_size= config['state_dim'], output_size= 1, num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
         
         self.actor_z_sigma = neural_net(input_size= config['state_dim'], output_size= param['z_dim'], num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
-        self.actor_z_sigma.append(torch.nn.Softplus())
+        self.actor_z_sigma.add_module('softplus',torch.nn.Softplus())
 
         self.actor_D_sigma = neural_net(input_size= config['state_dim'], output_size= 1, num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
-        self.actor_D_sigma.append(torch.nn.Softplus())
+        self.actor_D_sigma.add_module('softplus',torch.nn.Softplus())
 
         self.actor_z_mu_target = neural_net(input_size= config['state_dim'], output_size= param['z_dim'], num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
         
         self.actor_D_mu_target = neural_net(input_size= config['state_dim'], output_size= 1, num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
         
         self.actor_z_sigma_target = neural_net(input_size= config['state_dim'], output_size= param['z_dim'], num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
-        self.actor_z_sigma_target.append(torch.nn.Softplus())
+        self.actor_z_sigma_target.add_module('softplus',torch.nn.Softplus())
 
         self.actor_D_sigma_target = neural_net(input_size= config['state_dim'], output_size= 1, num_hidden_layer=2, hidden_layer_size= param['actor_NN_nhid'], activation= param['actor_NN_gate'])
-        self.actor_D_sigma_target.append(torch.nn.Softplus())
+        self.actor_D_sigma_target.add_module('softplus',torch.nn.Softplus())
         
         self.actor_z_mu_target.load_state_dict(self.actor_z_mu.state_dict())
         self.actor_D_mu_target.load_state_dict(self.actor_D_mu.state_dict())
@@ -114,11 +127,11 @@ class COCT_actor_network(torch.nn.Module):
                         'z_mu': z_mu ,
                         'z_sigma': z_sigma ,
                         'D_mu':   D_mu - 1.5 ,
-                        'D_sigma':  D_sigma / 50,
+                        'D_sigma':  D_sigma ,
                         'z_mu_target': z_mu_target,
                         'z_sigma_target': z_sigma_target ,
                         'D_mu_target': D_mu_target -1.5,
-                        'D_sigma_target': D_sigma_target / 50,
+                        'D_sigma_target': D_sigma_target ,
                         # 'omega': self.z2omega( z_D[...,:-1] ),
                         }
         return predictions
@@ -175,7 +188,7 @@ class COCT:
         self.RB = RLDataset(D)
         self.total_steps = 0
         self.real_t = 0.
-        if config['load'] :
+        if param['load'] :
             #load
             pass
 
@@ -200,7 +213,7 @@ class COCT:
         return z
     def get_duration(self, mu_D, sigma_D):
         D = torch.distributions.Normal(mu_D, sigma_D+1e-4).rsample()
-        D = torch.nn.functional.softplus(D)+ continuous_env.dt - 0.01
+        D = torch.nn.functional.softplus(D)+ continuous_env.dt
         return D
 
     def update_critic(self, data):
@@ -234,7 +247,7 @@ class COCT:
         SPs_ZPs_TauPs_DPs = torch.cat((SPs,ZPs,TauPs, DPs), dim=1)
         Ss_Zs_Taus_Ds = torch.cat((Ss,Zs,Taus, Ds), dim=1)
         
-        target_Qs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.critic_target(SPs_ZPs_TauPs_DPs)
+        target_Qs = Rs + torch.exp(-self.rho * ds) *  self.critic_target(SPs_ZPs_TauPs_DPs) # TODO add different dones ...
         current_Qs = self.critic(Ss_Zs_Taus_Ds.detach())
         # target_Vs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.value(SPs)
 
@@ -295,8 +308,8 @@ class COCT:
         loss.backward()
         self.actor_network.actor_optimizer.step()
         # self.beta_opt.step()
-        
-        writer.add_scalars('z_D_batch_size', {'critic':(1-q).sum().detach(),
+        if param['log_level'] == 2:
+            writer.add_scalars('z_D_batch_size', {'critic':(1-q).sum().detach(),
                                                 }, self.total_steps, walltime=self.real_t)
         return (z_loss.mean().detach().numpy() , D_loss.mean().detach().numpy() , beta_loss.mean().detach().numpy() )
 
@@ -305,7 +318,7 @@ class COCT:
         
         c_loss = self.update_critic(data)
        
-        self.soft_update_params(self.critic, self.critic_target, tau = 0.01)
+        self.soft_update_params(self.critic, self.critic_target, tau = param['critic_target_update_tau'])
         self.soft_update_params(self.actor_network.actor_z_mu, self.actor_network.actor_z_mu_target, tau = 0.01)
         self.soft_update_params(self.actor_network.actor_z_sigma, self.actor_network.actor_z_sigma_target, tau = 0.01)
         self.soft_update_params(self.actor_network.actor_D_mu, self.actor_network.actor_D_mu_target, tau = 0.01)
@@ -314,12 +327,14 @@ class COCT:
         if self.total_steps % 10000 == 5000:
             D_values = self.RB.get_full()['D'][-5000:].reshape(-1)
             # print(D_values)
-            writer.add_histogram('Duration hist', D_values, global_step = self.total_steps)
+            if param['log_level']<=1:
+                writer.add_histogram('Duration hist', D_values, global_step = self.total_steps)
         
         if self.total_steps % 2 == 0 :#and self.total_steps > 1000:
             z_loss, D_loss, beta_loss = self.update_actors(data)
             # z_loss = D_loss = beta_loss = 0
-            writer.add_scalars('losses', {'critic':c_loss,
+            if param['log_level']==2:
+                writer.add_scalars('losses', {'critic':c_loss,
                                                 'actor_z': z_loss,
                                                 'actor_D': D_loss,
                                                 'beta': beta_loss}, self.total_steps, walltime=self.real_t)
@@ -393,7 +408,7 @@ class COCT:
         plt.axis([Theta.detach().numpy().min(), Theta.detach().numpy().max(), Theta_dot.detach().numpy().min(), Theta_dot.detach().numpy().max()])
         # plt.colorbar()
         # ax.set_title('surface')
-        plt.savefig('value_{}.png'.format(ID))
+        writer.add_figure('value', fig, global_step=0*self.total_steps)
         plt.close()
 
     def plot_policy(self):
@@ -421,6 +436,15 @@ class COCT:
     def scale_action(self,a):
         return 2 * torch.tanh(a)
 
+    def load_actor(self, filename):
+        self.actor_network.load_state_dict(torch.load(filename))
+        
+    def save_actor(self):
+        # saving whole model like baseagent
+        torch.save(self.actor_network.state_dict(), '{}/{}/model/{}_{}.model'.format(result_path,config_name, run_ID, self.total_steps))
+        
+        
+
 def evaluate():
     pass
 
@@ -428,24 +452,19 @@ if __name__ == '__main__':
 
     fig, axs = plt.subplots(3)
 
-    
+    t0 = time.time()
     
 
-    run_ID = args.ID
-    cfg_path = args.config
-    print(cfg_path)
-    result_path = args.result_path
-    with open(cfg_path) as file:
-        config = yaml.full_load(file)
 
-    param = config['param']
-    
     # env = gym.make(param['env'])
-    env = Env_test()
+    env = globals()[param['env']]()
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
     config['state_dim'] = state_dim
     z_dim = param['z_dim']
+    
+    log_data = {'config_ID': config['param_ID'], 'config': param, 'data': None, }
+
     # create dataset
     
     
@@ -495,7 +514,9 @@ if __name__ == '__main__':
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
             # print('R: ', R )
             # print((np.array(info['rewards']) * np.array(info['durations'])).sum())
-            # R -= 0.03/D.detach().numpy()
+            if param['Duraiton_penalty']:
+                R -= param['Duration_penalty_const']*d/D.detach().numpy()[0]
+                # print(0.02*d/D.detach().numpy()[0])
             # R += r_newmovement
             r_newmovement = 0
             agent.RB.notify(s=S.detach().numpy(), sp=sp, r=R, done=done, T=T,
@@ -508,21 +529,34 @@ if __name__ == '__main__':
             # print('R: ', R)
             agent.total_steps += 1
             
-            writer.add_scalars('timings', {'T':T.detach().numpy(),
-                                            'D': D.detach().numpy(),
-                                            'D_sigma': predictions['D_sigma'].detach().numpy(),
-                                            'tau': tau,
-                                            }, agent.total_steps, walltime=agent.real_t)
-            writer.add_scalars('action', {'z_mu': z,
-                                            'z_sigma': predictions['z_sigma_target'][0],
-                                            }, agent.total_steps, walltime=agent.real_t)
-            writer.add_scalar('Reward', R, agent.total_steps)
+            if param['log_level'] == 2:
+                writer.add_scalars('timings', {'T':T.detach().numpy(),
+                                                'D': D.detach().numpy(),
+                                                'D_sigma': predictions['D_sigma'].detach().numpy(),
+                                                'tau': tau,
+                                                }, agent.total_steps, walltime=agent.real_t)
+                writer.add_scalars('action', {'z_mu': z,
+                                                'z_sigma': predictions['z_sigma_target'][0],
+                                                }, agent.total_steps, walltime=agent.real_t)
+                writer.add_scalar('Reward', R, agent.total_steps)
             if agent.total_steps % 1000 == 0 :
                 # agent.test_critic()
-                agent.plot_value()
-                agent.plot_policy()
-                agent.plot_duration()
-                
+                if param['log_level']<=1:
+                    if param['env'] == 'CT_pendulum':
+                        agent.test_critic()
+                        agent.test_value()
+                    else:
+                        agent.plot_value()
+                        agent.plot_policy()
+                        agent.plot_duration()
+            if agent.total_steps % param['log_steps'] == 0:
+                print('{} steps/s'.format(agent.total_steps//(time.time()-t0)))
+                log_data['data'] = np.array(Returns)
+                np.save('{}/{}/data/{}.npy'.format(result_path,config_name, run_ID), log_data)
+
+            if agent.total_steps % param['save_interval'] == 0:
+                agent.save_actor()
+
             if agent.RB.real_size > 1 * config['param']['batch_size']:
                 agent.update()
 
@@ -531,7 +565,8 @@ if __name__ == '__main__':
                 # print(np.array(durations).sum())
                 # print(undiscounted_rewards)
                 # print(R)
-                writer.add_scalar('Return_discrete', Returns[-1], e)
+                if param['log_level'] == 1:
+                    writer.add_scalar('Return_discrete', Returns[-1], e)
                 break
             
             z_prev = z
