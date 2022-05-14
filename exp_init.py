@@ -37,6 +37,7 @@ Path("/home/amirk96/scratch/CTCO_Experiments/{}/configs".format(exp_name)).mkdir
 for i in range(len(configs)):
     Path("/home/amirk96/scratch/CTCO_Experiments/{}/results/config_{}/plots".format(exp_name,i)).mkdir(parents=True, exist_ok=True)
     Path("/home/amirk96/scratch/CTCO_Experiments/{}/results/config_{}/data".format(exp_name,i)).mkdir(parents=True, exist_ok=True)
+    Path("/home/amirk96/scratch/CTCO_Experiments/{}/results/config_{}/model".format(exp_name,i)).mkdir(parents=True, exist_ok=True)
 
 
 ## write configs

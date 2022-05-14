@@ -112,7 +112,7 @@ final_perf = np.array(final_perf)
 ax[0].set_xlabel('time-steps')
 ax[0].set_ylabel('Avg Reward')
 
-ax[0].set_ylim([-1,0])
+# ax[0].set_ylim([-1,0])
 ax[1].set_ylim([-1,0])
 
 ax[1].errorbar(range(len(configs)), final_perf, final_er, fmt='o', color='black',

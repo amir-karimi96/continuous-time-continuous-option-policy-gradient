@@ -1,4 +1,5 @@
 # actor critic continuous option continuous time 
+from imp import load_module
 import torch 
 import numpy as np
 from env_wrapper import  D2C, Env_test, CT_pendulum
@@ -18,9 +19,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--ID',default=0,type=int, help='param ID ')
 parser.add_argument('--config',default='0',type=str, help='config file name')
 parser.add_argument('--result_path',default='0',type=str, help='result folder path')
+parser.add_argument('--load_model', default=None,type=str, help='model')
 
 args = parser.parse_args()
 run_ID = args.ID
+load_model = args.load_model
 cfg_path = args.config
 torch.manual_seed(run_ID * 1000) 
 # print(cfg_path)
@@ -136,6 +139,7 @@ class COCT_actor_network(torch.nn.Module):
                         }
         return predictions
 
+
 class COCT:
     def __init__(self,config) -> None:
         print(config['state_dim'] ) 
@@ -188,9 +192,7 @@ class COCT:
         self.RB = RLDataset(D)
         self.total_steps = 0
         self.real_t = 0.
-        if param['load'] :
-            #load
-            pass
+        
 
         
         # option terminaiton model beta(T|s,z_{-1})
@@ -327,7 +329,7 @@ class COCT:
         if self.total_steps % 10000 == 5000:
             D_values = self.RB.get_full()['D'][-5000:].reshape(-1)
             # print(D_values)
-            if param['log_level']<=1:
+            if param['log_level']>=1:
                 writer.add_histogram('Duration hist', D_values, global_step = self.total_steps)
         
         if self.total_steps % 2 == 0 :#and self.total_steps > 1000:
@@ -442,7 +444,7 @@ class COCT:
     def save_actor(self):
         # saving whole model like baseagent
         torch.save(self.actor_network.state_dict(), '{}/{}/model/{}_{}.model'.format(result_path,config_name, run_ID, self.total_steps))
-        
+
         
 
 def evaluate():
@@ -471,7 +473,10 @@ if __name__ == '__main__':
     RB_list = []
 
     agent = COCT(config)
-    
+    if load_model is not None:
+        #load
+        agent.actor_network.load_state_dict(torch.load(load_model))
+        
 
     num_ep = 10000
     continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho)
@@ -541,7 +546,7 @@ if __name__ == '__main__':
                 writer.add_scalar('Reward', R, agent.total_steps)
             if agent.total_steps % 1000 == 0 :
                 # agent.test_critic()
-                if param['log_level']<=1:
+                if param['log_level']>=1:
                     if param['env'] == 'CT_pendulum':
                         agent.test_critic()
                         agent.test_value()
@@ -565,7 +570,7 @@ if __name__ == '__main__':
                 # print(np.array(durations).sum())
                 # print(undiscounted_rewards)
                 # print(R)
-                if param['log_level'] == 1:
+                if param['log_level'] >= 1:
                     writer.add_scalar('Return_discrete', Returns[-1], e)
                 break
             

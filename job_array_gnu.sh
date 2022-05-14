@@ -2,7 +2,7 @@
 #SBATCH --mail-user=amir.karimi96@gmail.com
 #SBATCH --mail-type=ALL
 #SBATCH --account=def-ashique
-#SBATCH --time=01:59:00
+#SBATCH --time=02:59:00
 #SBATCH --mem=8000M
 #SBATCH --cpus-per-task=10
 #SBATCH --job-name=test
