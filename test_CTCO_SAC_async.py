@@ -130,7 +130,7 @@ if __name__ == '__main__':
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
             
-            time.sleep(np.float64(d/10))
+            time.sleep(np.float64(d))
             
             # print('R: ', R )
             # print((np.array(info['rewards']) * np.array(info['durations'])).sum())
@@ -141,6 +141,7 @@ if __name__ == '__main__':
             if done:
                 if info['TimeLimit.truncated']==False:
                     done_not_max = True
+            
             
                 
             
