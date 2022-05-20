@@ -13,7 +13,7 @@ import time
 from mpl_toolkits import mplot3d
 from matplotlib import cm
 import pickle
-from agents import COCT_SAC
+from agents import SAC
 
 # Writer will output to ./runs/ directory by default
 parser = argparse.ArgumentParser()
@@ -52,7 +52,7 @@ if __name__ == '__main__':
 
 
     # env = gym.make(param['env'])
-    env = globals()[param['env']]()
+    env = globals()[param['env']](dt=param['env_dt'])
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
     config['action_high'] = env.action_space.high
@@ -69,14 +69,14 @@ if __name__ == '__main__':
 
     
     
-    agent = COCT_SAC(config)
+    agent = SAC(config)
     if load_model is not None:
         #load
         agent.actor_network.load_state_dict(torch.load(load_model))
         
 
     num_ep = 3000
-    continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho)
+    continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho, precise=True)
 
     
     t = 0.

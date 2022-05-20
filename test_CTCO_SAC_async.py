@@ -13,7 +13,10 @@ import time
 from mpl_toolkits import mplot3d
 from matplotlib import cm
 import pickle
-from agents import COCT_SAC
+from agents import COCT_SAC, COCT_SAC_async,test_async
+import os 
+from multiprocessing import Queue
+import multiprocessing
 
 # Writer will output to ./runs/ directory by default
 parser = argparse.ArgumentParser()
@@ -23,25 +26,32 @@ parser.add_argument('--result_path',default='0',type=str, help='result folder pa
 parser.add_argument('--load_model', default=None,type=str, help='model')
 
 args = parser.parse_args()
-run_ID = args.ID
-load_model = args.load_model
-cfg_path = args.config
-torch.manual_seed(run_ID * 1000) 
-# print(cfg_path)
-result_path = args.result_path
-with open(cfg_path) as file:
-    config = yaml.full_load(file)
 
-param = config['param']
-config_name = 'config_{}'.format(config['param_ID'])
-
-       
 
 def evaluate():
     pass
 
 if __name__ == '__main__':
 
+    os.environ['OMP_NUM_THREADS'] = '1'
+    os.environ['MKL_NUM_THREADS'] = '1'
+    torch.set_num_threads(1)
+    torch.multiprocessing.set_start_method('spawn')
+
+
+    run_ID = args.ID
+    load_model = args.load_model
+    cfg_path = args.config
+    torch.manual_seed(run_ID * 1000) 
+    # print(cfg_path)
+    result_path = args.result_path
+    with open(cfg_path) as file:
+        config = yaml.full_load(file)
+
+    param = config['param']
+    config_name = 'config_{}'.format(config['param_ID'])
+
+       
 
     writer = SummaryWriter(log_dir='{}/{}/result_{}'.format(result_path,config_name, run_ID))
 
@@ -59,26 +69,36 @@ if __name__ == '__main__':
     config['action_low'] = env.action_space.low
     config['state_dim'] = state_dim
     config['env_dt'] = env.dt
-    config['writer'] = writer
-    config['init_alpha'] = 1e-3
-    config['log_alpha_requires_grad'] = True
-    config['log_alpha_lr'] = 1e-4
+    # config['writer'] = writer
+    
     z_dim = param['z_dim']
     
     log_data = {'config_ID': config['param_ID'], 'config': param, 'data': None, }
+    
+    D = Domain(Variable('s',config['state_dim']), Variable('sp',config['state_dim']),
+                Variable('z',param['z_dim']),
+                Variable('d',1),
+                Variable('D',1),
+                Variable('r',1), Variable('done',1), Variable('done_not_max',1))    
+    
 
+    RB = RLDataset(D)
+    RB_sample_queue = Queue(maxsize=100)
     
+    # Queue for logging from agent
+    lock = multiprocessing.Lock()
+    agent_info_queue = Queue(maxsize=1)
     
-    agent = COCT_SAC(config)
-    if load_model is not None:
-        #load
-        agent.actor_network.load_state_dict(torch.load(load_model))
+    agent = COCT_SAC_async(config, RB_sample_queue, agent_info_queue)
+    # if load_model is not None:
+    #     #load
+    #     agent.actor_network.load_state_dict(torch.load(load_model))
         
 
     num_ep = 3000
     continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho)
 
-    
+    agent.update_process.start()
     t = 0.
     Returns = []
     for e in range(num_ep):
@@ -88,7 +108,7 @@ if __name__ == '__main__':
         undiscounted_rewards = []
         durations = []
         while True :
-
+            t1 = time.time()
             # get actor net outputs based on current state and previous option
             predictions = agent.actor_network(S)
             
@@ -103,11 +123,15 @@ if __name__ == '__main__':
             
             
             # sample movement omega
-            omega = agent.z2omega(z) # TO DO add stochasticity
+            # omega = agent.z2omega(z) # TO DO add stochasticity
+            omega = z
 
             d = D.detach().numpy()[0]
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
+            
+            time.sleep(np.float64(d/10))
+            
             # print('R: ', R )
             # print((np.array(info['rewards']) * np.array(info['durations'])).sum())
             if param['Duraiton_penalty']:
@@ -119,10 +143,11 @@ if __name__ == '__main__':
                     done_not_max = True
             
                 
-            agent.RB.notify(s=S.detach().numpy(), sp=sp, r=R, done_not_max=done_not_max, done=done,
-                        z=z.detach().numpy(), 
-                        D=D.detach().numpy(), d=d)
             
+            sample = {'s':S.detach().numpy(), 'sp':sp, 'r':R, 'done_not_max':done_not_max, 'done':done,
+                        'z':z.detach().numpy(), 
+                        'D':D.detach().numpy(), 'd':d}
+            RB_sample_queue.put(sample)
             undiscounted_rewards.extend(info['rewards'])
             durations.extend(info['durations'])
             # RB_list.append([s, sp, z, R, done, D, T, tau, agent.real_t])
@@ -139,10 +164,11 @@ if __name__ == '__main__':
                                                 }, agent.total_steps, walltime=agent.real_t)
                 writer.add_scalar('Reward', R, agent.total_steps)
             
-                
-
-            if agent.RB.real_size > 1 * config['param']['batch_size']:
-                agent.update(num_epochs=len(info['durations']))
+           
+            if agent_info_queue.full():
+                stat_dict = agent_info_queue.get()
+                for k, v in stat_dict.items():
+                    writer.add_scalar(k, v, agent.total_steps)
 
             if done:
                 agent.total_episodes += 1
@@ -153,10 +179,10 @@ if __name__ == '__main__':
                 if param['log_level'] >= 1:
                     writer.add_scalar('Return_discrete', Returns[-1], e)
                     
-                    if agent.total_episodes % 50 == 1 :
-                        if 'pendulum' in param['env']:
-                            agent.test_critic()
-                            agent.test_value()
+                    # if agent.total_episodes % 50 == 1 :
+                    #     if 'pendulum' in param['env']:
+                    #         agent.test_critic()
+                    #         agent.test_value()
                         # else:
                         #     agent.plot_value()
                         #     agent.plot_policy()
@@ -177,4 +203,4 @@ if __name__ == '__main__':
             S = torch.tensor(sp, dtype=torch.float32)
             
 
-writer.close()
+    writer.close()
