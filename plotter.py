@@ -1,3 +1,4 @@
+from ast import parse
 from math import exp
 from typing_extensions import final
 import numpy as np
@@ -11,13 +12,14 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--exp_name',default='0',type=str, help='exp file name')
 parser.add_argument('--success_rate',default=0,type=int, help='bool ')
 parser.add_argument('--window',default=100,type=int, help='window size ')
-
+parser.add_argument('--experiments_directory', default='0', type=str, help = 'experiments dir')
 args = parser.parse_args()
 SR = args.success_rate
 exp_name = args.exp_name
+exps_dir = args.experiments_directory
 
 
-with open('/home/amirk96/scratch/CTCO_Experiments/{}/config_base.yaml'.format(exp_name),'r') as file:
+with open('{}/{}/config_base.yaml'.format(exps_dir, exp_name),'r') as file:
     config_base = yaml.full_load(file)
     num_runs = config_base['experiment']['num_runs']
     num_params = config_base['experiment']['num_params']
@@ -42,14 +44,14 @@ result = {  'exp_name': exp_name,
 
 
 for p in range(num_params):
-    with open('/home/amirk96/scratch/CTCO_Experiments/{}/configs/config_{}.yaml'.format(exp_name,p),'r') as file:
+    with open('{}/{}/configs/config_{}.yaml'.format(exps_dir, exp_name,p),'r') as file:
         config = yaml.full_load(file)
 
     configs.append(config)
     print('% {}'.format(p/num_params))
     for i in range(num_runs):
         try:
-            d = np.load('/home/amirk96/scratch/CTCO_Experiments/{}/results/config_{}/data/{}.npy'.format(exp_name,p, i), allow_pickle=True)
+            d = np.load('{}/{}/results/config_{}/data/{}.npy'.format(exps_dir, exp_name,p, i), allow_pickle=True)
         except:
             print('config_{} run {} not found'.format(p,i))
         else:
@@ -113,7 +115,7 @@ ax[0].set_xlabel('time-steps')
 ax[0].set_ylabel('Avg Reward')
 
 # ax[0].set_ylim([-1,0])
-ax[1].set_ylim([-1,0])
+# ax[1].set_ylim([-1,0])
 
 ax[1].errorbar(range(len(configs)), final_perf, final_er, fmt='o', color='black',
              ecolor='lightgray', elinewidth=3, capsize=0)
@@ -139,7 +141,7 @@ if SR:
     ax[2].set_ylim([0,1])
 
 #plt.suptitle('N_actions = 10, N_modes = 4')
-plt.savefig('/home/amirk96/scratch/CTCO_Experiments/{}/{}.png'.format(exp_name,exp_name))
+plt.savefig('{}/{}/{}.png'.format(exps_dir, exp_name,exp_name))
 # np.save('/home/amirk96/projects/def-ashique/amirk96/CTCO/Experiment_results/data/{}.npy'.format(exp_name ), result)
 
 def VS(performance_vector ,variable):
@@ -172,6 +174,6 @@ for i,v in enumerate(variables):
     ax[i].plot([p for p in config_base['experiment']['params'][v]] ,y,  linestyle='dashed', marker='o')
     ax[i].set_xlabel(v)
     ax[i].set_ylabel('best performance')
-    ax[i].set_xscale("log")
+    # ax[i].set_xscale("log")
 plt.tight_layout()
-plt.savefig('/home/amirk96/scratch/CTCO_Experiments/{}/{}.pdf'.format(exp_name,exp_name+'_VA'))
+plt.savefig('{}/{}/{}.pdf'.format(exps_dir, exp_name,exp_name+'_VA'))
