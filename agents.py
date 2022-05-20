@@ -190,11 +190,11 @@ class COCT_actor_network_simple(torch.nn.Module):
         predictions = { 
                         'z_mu': z_mu ,
                         'z_sigma': z_sigma ,
-                        'D_mu':   D_mu - 1.5 ,
+                        'D_mu':   D_mu ,
                         'D_sigma':  D_sigma ,
                         'z_mu_target': z_mu_target,
                         'z_sigma_target': z_sigma_target ,
-                        'D_mu_target': D_mu_target -1.5,
+                        'D_mu_target': D_mu_target ,
                         'D_sigma_target': D_sigma_target ,
                         # 'omega': self.z2omega( z_D[...,:-1] ),
                         }
@@ -1273,11 +1273,17 @@ class COCT_SAC_async:
     def get_duration(self, mu_D, sigma_D):
         D_dist = torch.distributions.Normal(mu_D, sigma_D+1e-4)
         D0 = D_dist.rsample()
-        D = torch.nn.functional.softplus(D0) + self.config['env_dt']
-        D = D0 ** 2 + self.config['env_dt']
+        # D = torch.nn.functional.softplus(D0) + self.config['env_dt']
+        # D = D0 ** 2 + self.config['env_dt']
+        D = torch.sigmoid(D0) + self.config['env_dt']
+        # log_prob_D = (D_dist.log_prob(D0) - torch.log( 1 - torch.sigmoid(-D) + 1e-6)).sum(-1)
+        # if square of gaussian
+        #fD_D:
+        # log_prob_D = torch.log(1/(2 * (1.0e-6 + D-self.config['env_dt'])**0.5) * (torch.exp(D_dist.log_prob(D0)) + torch.exp(D_dist.log_prob(-D0))))
         
-        log_prob_D = (D_dist.log_prob(D0) - torch.log( 1 - torch.sigmoid(-D) + 1e-6)).sum(-1)
-        
+        # if sigmoid
+        # FD_D:
+        log_prob_D = (D_dist.log_prob(D0) - torch.log(1e-6 + torch.sigmoid(D0) * (1 - torch.sigmoid(D0)) )).sum(-1)
         return D, log_prob_D
 
     def update_critic(self, data):
@@ -1288,11 +1294,12 @@ class COCT_SAC_async:
         Zs = torch.tensor(data['z'], dtype=torch.float32)
         Ds = torch.tensor(data['D'], dtype=torch.float32)
         ds = torch.tensor(data['d'], dtype=torch.float32)
-
+        
         
         Rs = torch.tensor(data['r'], dtype=torch.float32)
         dones = torch.tensor(data['done'], dtype=torch.float32)
-
+        dones_not_max = torch.tensor(data['done_not_max'], dtype=torch.float32)
+        # print(1-dones_not_max)
         predictions = self.actor_network(SPs)
         
         
@@ -1309,7 +1316,7 @@ class COCT_SAC_async:
         target_V = self.critic_target(SPs_ZPs_DPs) - self.alpha.detach() * log_probs # TODO like sac add another critic network
         
 
-        target_Qs = Rs + torch.exp(-self.rho * ds) *  target_V # TODO add different dones ...
+        target_Qs = Rs + (1 - dones_not_max) * torch.exp(-self.rho * ds) *  target_V # TODO add different dones ...
         current_Qs = self.critic(Ss_Zs_Ds.detach())
         # target_Vs = Rs + torch.exp(-self.rho * ds) * (1-dones) * self.value(SPs)
 
@@ -1360,7 +1367,6 @@ class COCT_SAC_async:
         
         loss.backward()
         self.actor_network.actor_optimizer.step()
-
         if self.log_alpha.requires_grad:
             self.log_alpha_optimizer.zero_grad()
             alpha_loss = (self.alpha *
