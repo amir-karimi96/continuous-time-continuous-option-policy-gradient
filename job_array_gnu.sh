@@ -2,9 +2,9 @@
 #SBATCH --mail-user=amir.karimi96@gmail.com
 #SBATCH --mail-type=ALL
 #SBATCH --account=def-ashique
-#SBATCH --time=02:59:00
+#SBATCH --time=01:00:00
 #SBATCH --mem=8000M
-#SBATCH --cpus-per-task=10
+#SBATCH --cpus-per-task=20
 #SBATCH --job-name=test
 #SBATCH --output=/home/amirk96/scratch/outputs/%x-%j.out
 echo 'Hello, world!'

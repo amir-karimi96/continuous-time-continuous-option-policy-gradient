@@ -52,9 +52,14 @@ if __name__ == '__main__':
     config_name = 'config_{}'.format(config['param_ID'])
 
        
-
-    writer = SummaryWriter(log_dir='{}/{}/result_{}'.format(result_path,config_name, run_ID))
-
+    while True:
+        time.sleep(run_ID / 10)
+        try:
+            writer = SummaryWriter(log_dir='{}/{}/result_{}'.format(result_path,config_name, run_ID))
+            break
+        except:
+            print("An exception occurred")
+    
     fig, axs = plt.subplots(3)
 
     t0 = time.time()
@@ -62,7 +67,7 @@ if __name__ == '__main__':
 
 
     # env = gym.make(param['env'])
-    env = globals()[param['env']]()
+    env = globals()[param['env']](dt=param['env_dt'])
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
     config['action_high'] = env.action_space.high
@@ -95,7 +100,7 @@ if __name__ == '__main__':
     #     agent.actor_network.load_state_dict(torch.load(load_model))
         
 
-    num_ep = 3000
+    num_ep = 300
     continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho)
 
     agent.update_process.start()
@@ -168,8 +173,9 @@ if __name__ == '__main__':
            
             if agent_info_queue.full():
                 stat_dict = agent_info_queue.get()
-                for k, v in stat_dict.items():
-                    writer.add_scalar(k, v, agent.total_steps)
+                if param['log_level'] == 2:
+                    for k, v in stat_dict.items():
+                        writer.add_scalar(k, v, agent.total_steps)
 
             if done:
                 agent.total_episodes += 1
