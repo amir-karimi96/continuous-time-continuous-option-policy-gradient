@@ -70,6 +70,7 @@ if __name__ == '__main__':
 
     # env = gym.make(param['env'])
     env = globals()[param['env']](dt=param['env_dt'])
+    env.seed(0)
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
     config['action_high'] = env.action_space.high
@@ -110,6 +111,7 @@ if __name__ == '__main__':
     Returns = []
     for e in range(num_ep):
         s = continuous_env.reset()
+        print(s)
         S = torch.tensor(s, dtype = torch.float32)
         
         undiscounted_rewards = []

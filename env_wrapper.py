@@ -35,7 +35,7 @@ class CT_mountain_car(Continuous_MountainCarEnv):
         velocity = self.state[1]
         force = min(max(action[0], -1.0), 1.0)
 
-        velocity += self.dt / 0.01 * force*self.power -0.0025 * np.cos(3*position)
+        velocity += self.dt / 0.01 * (force*self.power -0.0025 * np.cos(3*position))
         if (velocity > self.max_speed): velocity = self.max_speed
         if (velocity < -self.max_speed): velocity = -self.max_speed
         position += self.dt / 0.01 * velocity
@@ -47,7 +47,7 @@ class CT_mountain_car(Continuous_MountainCarEnv):
 
         reward = 0
         if done:
-            reward = 100.0
+            reward = 100.0 * 0.01 / self.dt
         reward-= (action[0]**2) *0.1
 
         self.state = np.array([position, velocity])
