@@ -3,7 +3,7 @@
 #SBATCH --mail-type=ALL
 #SBATCH --account=def-ashique
 #SBATCH --time=01:00:00
-#SBATCH --mem=8000M
+#SBATCH --mem=32000M
 #SBATCH --cpus-per-task=20
 #SBATCH --job-name=test
 #SBATCH --output=/home/amirk96/scratch/outputs/%x-%j.out

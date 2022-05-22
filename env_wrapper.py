@@ -4,7 +4,7 @@ from gym import spaces
 from gym.envs.classic_control.pendulum import PendulumEnv
 from gym.envs.classic_control import Continuous_MountainCarEnv
 
-class CT_mountatin_car(Continuous_MountainCarEnv):
+class CT_mountain_car(Continuous_MountainCarEnv):
     def __init__(self, dt=0.01):
         self.DT = dt
         self.dt = self.DT

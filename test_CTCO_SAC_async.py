@@ -2,7 +2,7 @@
 
 import torch 
 import numpy as np
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountatin_car
+from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
 import gym
 import argparse
 import yaml
@@ -51,15 +51,17 @@ if __name__ == '__main__':
     param = config['param']
     config_name = 'config_{}'.format(config['param_ID'])
 
-       
-    while True:
-        time.sleep(run_ID / 10)
-        try:
-            writer = SummaryWriter(log_dir='{}/{}/result_{}'.format(result_path,config_name, run_ID))
-            break
-        except:
-            print("An exception occurred")
     
+    if param['log_level'] >= 1:
+        while True:
+            time.sleep(run_ID / 10)
+            try:
+                writer = SummaryWriter(log_dir='{}/{}/result_{}'.format(result_path,config_name, run_ID))
+                break
+            except:
+                print("An exception occurred")
+    
+
     fig, axs = plt.subplots(3)
 
     t0 = time.time()
