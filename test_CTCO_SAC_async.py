@@ -104,7 +104,7 @@ if __name__ == '__main__':
         
 
     num_ep = 300
-    continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho)
+    continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho, precise=True)
 
     agent.update_process.start()
     t = 0.
