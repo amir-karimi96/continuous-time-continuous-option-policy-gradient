@@ -36,7 +36,7 @@ if __name__ == '__main__':
     os.environ['OMP_NUM_THREADS'] = '1'
     os.environ['MKL_NUM_THREADS'] = '1'
     torch.set_num_threads(1)
-    torch.multiprocessing.set_start_method('spawn')
+    torch.multiprocessing.set_start_method('fork')
 
 
     run_ID = args.ID
@@ -202,10 +202,14 @@ if __name__ == '__main__':
                 if agent.total_episodes % param['save_interval'] == 0:
                     print('{} steps/s'.format(agent.total_steps//(time.time()-t0)))
                     log_data['data'] = np.array(Returns)
-                    np.save('{}/{}/data/{}.npy'.format(result_path,config_name, run_ID), log_data)
-                
-                    agent.save_actor(filename='{}/{}/model/{}_{}.model'.format(result_path,config_name, run_ID, agent.total_episodes))
-            
+                    try:
+                        np.save('{}/{}/data/{}.npy'.format(result_path,config_name, run_ID), log_data)
+                    except:
+                        print('np save problem')  
+                    try:          
+                        agent.save_actor(filename='{}/{}/model/{}_{}.model'.format(result_path,config_name, run_ID, agent.total_episodes))
+                    except:
+                        print('model save problem')
 
                 break
             

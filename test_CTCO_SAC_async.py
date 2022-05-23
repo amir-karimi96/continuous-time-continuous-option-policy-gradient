@@ -13,7 +13,7 @@ import time
 from mpl_toolkits import mplot3d
 from matplotlib import cm
 import pickle
-from agents import COCT_SAC, COCT_SAC_async,test_async
+from agents import COCT_SAC, COCT_SAC_async
 import os 
 from multiprocessing import Queue
 import multiprocessing
@@ -36,7 +36,7 @@ if __name__ == '__main__':
     os.environ['OMP_NUM_THREADS'] = '1'
     os.environ['MKL_NUM_THREADS'] = '1'
     torch.set_num_threads(1)
-    torch.multiprocessing.set_start_method('spawn')
+    torch.multiprocessing.set_start_method('fork')
 
 
     run_ID = args.ID
