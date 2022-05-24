@@ -63,6 +63,7 @@ for p in range(num_params):
 
 for i in range(num_params):
     lens = [j.shape[0] for j in D[i]]
+    print(lens)
     #print(lens)
     min_len = min(lens)
     #len = min(len, 250000)

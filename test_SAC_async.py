@@ -109,6 +109,7 @@ if __name__ == '__main__':
     agent.update_process.start()
     t = 0.
     Returns = []
+    t00 = time.time()
     for e in range(num_ep):
         s = continuous_env.reset()
         print(s)
@@ -138,8 +139,9 @@ if __name__ == '__main__':
             d = D.detach().numpy()[0]
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
-            
-            time.sleep(np.float64(d))
+            real_t = (time.time()-t00)
+            if agent.real_t + d > real_t:
+                time.sleep(np.float64(agent.real_t + d - real_t))
             
             # print('R: ', R )
             # print((np.array(info['rewards']) * np.array(info['durations'])).sum())

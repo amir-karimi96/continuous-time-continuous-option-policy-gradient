@@ -225,6 +225,5 @@ class D2C:
                 Info['rewards'].append(r)
                 Info['durations'].append(d)
             if done:
-                if info['TimeLimit.truncated']:
-                    Info['TimeLimit.truncated'] = True
+                Info['TimeLimit.truncated'] =  info['TimeLimit.truncated']
         return (s, R, done, Info)
