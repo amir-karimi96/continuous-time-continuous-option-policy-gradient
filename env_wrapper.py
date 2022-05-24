@@ -202,6 +202,8 @@ class D2C:
         # duration = max(duration ,self.dt)
         
         integration_steps = int(duration / self.dt)
+        if integration_steps == 0 and self.precise == False:
+            integration_steps = 1
         for i in range(integration_steps):
             
             a = self.low_level_func(A, i * self.dt, duration)
