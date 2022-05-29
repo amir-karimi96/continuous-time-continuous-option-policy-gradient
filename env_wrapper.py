@@ -89,7 +89,7 @@ class CT_pendulum(PendulumEnv):
         
         s,r,done,info = super().step(u)
 
-        if self.ep_time >= 10:
+        if self.ep_time >= (10-1e-3):
             done = True
             info['TimeLimit.truncated'] = True
 
@@ -218,7 +218,7 @@ class D2C:
         d = duration - integration_steps * self.dt
         
         if self.precise:
-            if d > 0:
+            if d > 0:      
                 a = self.low_level_func(A, integration_steps * self.dt, duration)
                 s, r, done, info = self.env.step(a, d)
                 R += self.get_continuous_reward(r, integration_steps * self.dt, d)

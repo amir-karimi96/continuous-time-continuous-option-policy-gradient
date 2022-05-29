@@ -101,13 +101,14 @@ if __name__ == '__main__':
     agent = COCT_SAC_async(config, RB_sample_queue, agent_info_queue)
        
     
-    low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim).low_level_function
+    low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=param['z_dim']).low_level_function
 
-    num_ep = 300
+    num_ep = 500
     continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=True)
 
     agent.update_process.start()
     t = 0.
+    t00 = time.time()
     Returns = []
     for e in range(num_ep):
         s = continuous_env.reset()
@@ -139,7 +140,10 @@ if __name__ == '__main__':
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
             
-            time.sleep(np.float64(d))
+            real_t = (time.time()-t00)
+            if agent.real_t + d > real_t:
+                time.sleep(np.float64(agent.real_t + d - real_t))
+            
             
             # print('R: ', R )
             # print((np.array(info['rewards']) * np.array(info['durations'])).sum())
@@ -180,9 +184,12 @@ if __name__ == '__main__':
                 if param['log_level'] == 2:
                     for k, v in stat_dict.items():
                         writer.add_scalar(k, v, agent.total_steps)
-
+            
+            agent.real_t += d
+            
             if done:
                 agent.total_episodes += 1
+                
                 Returns.append((np.array(undiscounted_rewards) * np.array(durations)).sum())
                 # print(np.array(durations).sum())
                 # print(undiscounted_rewards)
@@ -210,7 +217,7 @@ if __name__ == '__main__':
                 break
             
             
-            agent.real_t += d
+            
             S = torch.tensor(sp, dtype=torch.float32)
             
 

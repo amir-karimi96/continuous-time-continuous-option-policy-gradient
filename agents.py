@@ -1209,7 +1209,7 @@ class COCT_SAC_async:
         self.RB = RLDataset(D)
 
         # self.z2omega = lambda x: x
-        self.update_process = multiprocessing.Process(target=self.update_process_target, args=(RB_sample_queue,A_Q,config))
+        self.update_process = multiprocessing.Process(target=self.update_process_target, args=(RB_sample_queue,A_Q,config), daemon=True)
 
 
     def update_process_target(self,R_sample_Q,A_Q,config):
@@ -1277,6 +1277,7 @@ class COCT_SAC_async:
         # D = torch.nn.functional.softplus(D0) + self.config['env_dt']
         # D = D0 ** 2 + self.config['env_dt']
         D = torch.sigmoid(D0) + self.config['env_dt']
+        # D = D*0 + 1.0
         # log_prob_D = (D_dist.log_prob(D0) - torch.log( 1 - torch.sigmoid(-D) + 1e-6)).sum(-1)
         # if square of gaussian
         #fD_D:

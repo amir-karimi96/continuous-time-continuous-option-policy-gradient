@@ -10,8 +10,9 @@ def rbf(centers, width):
     return lambda x: b(x) / np.sum(b(x), axis=1, keepdims=True)  # eq 8
 
 class sub_policy:
-    def __init__(self, low_level_function_choice, low_level_action_dim) -> None:
+    def __init__(self, low_level_function_choice, low_level_action_dim, n_features= 5) -> None:
         self.low_level_action_dim = low_level_action_dim
+        self.n_features = n_features
         self.low_level_function = self.__getattribute__(low_level_function_choice)
         # print(self.low_level_function(A = np.array([1,2,0.5,0,-1,1,-1,2,4,2]), t= 1, duration = 1))
 
@@ -20,7 +21,7 @@ class sub_policy:
 
     def linear_rbf(self, A, t, duration):
         
-        n_features = 2
+        n_features = self.n_features
 
         params = A.reshape(self.low_level_action_dim, n_features)
         
@@ -34,7 +35,7 @@ class sub_policy:
         # print(phi.shape)
         # return np.matmul(phi, np.ones((5,1))) 
         # print(np.matmul(phi, params.T).shape)
-        print(np.matmul(phi, params.T).reshape(-1) , A, t, duration)
+        # print(np.matmul(phi, params.T).reshape(-1) , A, t, duration)
         return np.matmul(phi, params.T).reshape(-1)
 
 def test(f):
