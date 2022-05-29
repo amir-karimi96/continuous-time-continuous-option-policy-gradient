@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from numpy.core.fromnumeric import shape, var
 import yaml
 import argparse
+from scipy.stats import binned_statistic
 
 
 parser = argparse.ArgumentParser()
@@ -29,6 +30,8 @@ fig = plt.figure()
 ax = [fig.add_subplot(3, 1, 1), fig.add_subplot(3, 1, 2), fig.add_subplot(3, 1, 3)]
 
 D = [ [] for i in range(num_params)] # list for data
+D_time = [ [] for i in range(num_params)] # list for data_time
+
 A = [ [] for i in range(num_params)] # list for actions
 
 P = [ [] for i in range(num_params)] # for param config
@@ -59,21 +62,31 @@ for p in range(num_params):
             if d['data'].shape[0] == 1:
                 print(int(d['config_ID']), i)
             D[int(d['config_ID'])].append(d['data'])
+            D_time[int(d['config_ID'])].append(d['data_wall_time'])
+            
             if SR:
                 A[int(d['config_ID'])].append(d['action_features'])
             P[int(d['config_ID'])]=d['config']
 
 for i in range(num_params):
     lens = [j.shape[0] for j in D[i]]
-    print(i,lens)
+    times = [T[-1] for T in D_time[i]]
+    # print(i,lens)
     #print(lens)
     min_len = min(lens)
+    min_time = min(times)
     #len = min(len, 250000)
-    print(min_len)
-    D[i] = [j[:min_len] for j in D[i]] 
-    D[i] = np.array(D[i])
-    if SR:
-        A[i] = np.array(A[i])
+    # print(min_len)
+    D[i] = [j[:np.where( T <= min_time)[0][-1]] for j,T in zip(D[i], D_time[i])] 
+    # print(np.array(D_time[i]))
+    # print(D_time[i][0])
+    # print('time_last: ', np.where( D_time[i][0] <= min_time)[0][-1])
+    D_time[i] = [T[:np.where( T <= min_time)[0][-1]] for T in D_time[i]] 
+    # print(D_time[i])
+    # exit()
+    # D[i] = np.array(D[i])
+    # D_time[i] = np.array(D[i])
+    
     
 
 #print(D[1].shape)
@@ -83,14 +96,29 @@ final_perf = []
 final_er = []
 auc_perf = []
 auc_er = []
+
+
+R_mean_lsit = []
+R_std_list = []
+
 for i,d in enumerate(D):
     #print(d.shape)
     # d = np.concatenate(list(d),axis=1)
     # print(d.shape)
+    runs_list = []
+    for j,T in zip(D[i], D_time[i]):
+        mean_stat = binned_statistic(T, j, 
+                                statistic='mean', 
+                                bins=7200//60, 
+                                range=(0, 7200))
+        runs_list.append(mean_stat.statistic)
+    runs_list = np.array(runs_list)
+
     w = args.window
-    R_mean = d.mean(axis = 0)
-    
-    R_std = d.std(axis = 0,ddof=1)/np.sqrt(d.shape[0])
+    R_mean = runs_list.mean(axis = 0)
+    R_mean_lsit.append(R_mean)
+    R_std = runs_list.std(axis = 0,ddof=1)/np.sqrt(runs_list.shape[0])
+    R_std_list.append(R_std)
     R_std_smoothed = np.convolve(R_std, np.ones(w), 'valid') / w
     R_smoothed = np.convolve(R_mean, np.ones(w), 'valid') / w
     final_perf.append(R_smoothed[-1])
@@ -105,6 +133,7 @@ for i,d in enumerate(D):
     # if i in [4,6,7,15]:
     p = ax[0].plot(R_smoothed, label = label)
     ax[0].fill_between(range(R_smoothed.shape[0]), R_smoothed-R_std_smoothed, R_smoothed+R_std_smoothed, alpha = 0.3, color = p[0].get_color())
+
 
 # store results
 
@@ -126,23 +155,6 @@ ax[1].errorbar(range(len(configs)), final_perf, final_er, fmt='o', color='black'
 #ax[1].set_yscale("log")
 
 
-# plot success rates
-if SR:
-    success_prop = np.zeros((num_params,))
-    for i,d in enumerate(A):
-       
-        #,J = np.where( )
-        #print(I)
-        k=(np.abs(A[i].squeeze(-1)-0.9) < 0.025) +  (np.abs(A[i].squeeze(-1)+0.9) < 0.025)
-        #I = np.where( k.sum(axis=1) )
-        
-        #configs[i]['param']['N_a']
-        success_prop[i] = k.any(axis=1).mean()#len(I)/( num_runs)
-        #success_prop[i] = final_perf[i]
-    result['success_rates'] = success_prop
-    ax[2].bar(range(num_params),success_prop)
-    ax[2].set_ylim([0,1])
-
 #plt.suptitle('N_actions = 10, N_modes = 4')
 plt.savefig('{}/{}/{}.png'.format(exps_dir, exp_name,exp_name))
 # np.save('/home/amirk96/projects/def-ashique/amirk96/CTCO/Experiment_results/data/{}.npy'.format(exp_name ), result)
@@ -159,8 +171,34 @@ def VS(performance_vector ,variable):
     return performance_vector[best_ind_list]
     
 
+def plot_():
+    penalty_list = config_base['experiment']['params']['Duration_penalty_const']
+    z_dim_list = config_base['experiment']['params']['z_dim']
+    env_dt_list = config_base['experiment']['params']['env_dt']
+    c = np.ndarray((len(penalty_list), len(z_dim_list)),dtype=list)
+    fig, ax = plt.subplots(len(penalty_list), len(z_dim_list))
+    print(ax.shape)
+    for i,penalty in enumerate(penalty_list):
+        for j,z in enumerate(z_dim_list):
+            c[i,j] = []
+            # print(p, z)
+            for k in range(num_params):
+                if configs[k]['param']['Duration_penalty_const'] == penalty and configs[k]['param']['z_dim'] == z:
+                    c[i,j].append(k)
+            print(c[i,j])
+            for ind in c[i,j]:
+                # ax[i,j].plot([1,2,3])
+                print(ind)
+                p = ax[i,j].plot(R_mean_lsit[ind],label='freq = {}'.format(1/configs[ind]['param']['env_dt']))
+                ax[i,j].fill_between(range(R_mean_lsit[ind].shape[0]), R_mean_lsit[ind]-R_std_list[ind], R_mean_lsit[ind]+R_std_list[ind], alpha = 0.3, color = p[0].get_color())
+                ax[i,j].set_title('duration_penalty = {}, z_dim = {}'.format(penalty, z),fontsize=7)
+    ax[-1,-1].legend()
+    plt.tight_layout()
+    plt.savefig('{}/{}/{}_spec.png'.format(exps_dir, exp_name,exp_name))
 
-
+    
+plot_()
+exit()
 variables = []
 for p in list(config_base['experiment']['params'].keys()):
     if len(config_base['experiment']['params'][p]) > 1:
@@ -178,5 +216,7 @@ for i,v in enumerate(variables):
     ax[i].set_xlabel(v)
     ax[i].set_ylabel('best performance')
     # ax[i].set_xscale("log")
+
+
 plt.tight_layout()
 plt.savefig('{}/{}/{}.pdf'.format(exps_dir, exp_name,exp_name+'_VA'))
