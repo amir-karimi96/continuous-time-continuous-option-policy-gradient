@@ -233,14 +233,14 @@ class Env_test:
         return self.s ,r,done,info
 
 class D2C:
-    def __init__(self, discrete_env, low_level_funciton, rho, precise=False) -> None:
+    def __init__(self, discrete_env, low_level_funciton, rho, precise=False, eval_mode=False) -> None:
         self.env = discrete_env
         self.dt = discrete_env.dt  # discrete time-step
         self.rho = rho
 
         self.low_level_func = low_level_funciton
         self.precise = precise
-
+        self.eval_mode = eval_mode
     def reset(self,):
 
         # test for pendulum
@@ -266,6 +266,7 @@ class D2C:
         R = 0
         Info = {'rewards':[],
                 'durations': [],
+                'frames': []
                 }
         done = False
         # duration = max(duration ,self.dt)
@@ -277,7 +278,9 @@ class D2C:
             
             a = self.low_level_func(A, i * self.dt, duration)
             s, r, done, info = self.env.step(a)
-            # self.env.render()
+            if self.eval_mode:
+                f = self.env.render(mode='rgb_array')
+                Info['frames'].append(f)
             R += self.get_continuous_reward(r, i * self.dt, self.dt) 
             Info['rewards'].append(r)
             Info['durations'].append(self.dt)
@@ -290,6 +293,9 @@ class D2C:
             if d > 0:      
                 a = self.low_level_func(A, integration_steps * self.dt, duration)
                 s, r, done, info = self.env.step(a, d)
+                if self.eval_mode:
+                    f = self.env.render(mode='rgb_array')
+                    Info['frames'].append(f)
                 R += self.get_continuous_reward(r, integration_steps * self.dt, d)
                 Info['rewards'].append(r)
                 Info['durations'].append(d)
