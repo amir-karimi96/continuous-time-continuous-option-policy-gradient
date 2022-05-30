@@ -2,7 +2,7 @@
 
 import torch 
 import numpy as np
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
+from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car, CT_close_drawer
 import gym
 import argparse
 import yaml
@@ -17,7 +17,10 @@ from agents import COCT_SAC, COCT_SAC_async,SAC_async
 import os 
 from multiprocessing import Queue
 import multiprocessing
-
+try:
+    import rlbench.gym
+except:
+    pass
 # Writer will output to ./runs/ directory by default
 parser = argparse.ArgumentParser()
 parser.add_argument('--ID',default=0,type=int, help='param ID ')
@@ -70,7 +73,7 @@ if __name__ == '__main__':
 
     # env = gym.make(param['env'])
     env = globals()[param['env']](dt=param['env_dt'])
-    env.seed(0)
+    # env.seed(0)
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
     config['action_high'] = env.action_space.high
@@ -103,7 +106,7 @@ if __name__ == '__main__':
     #     agent.actor_network.load_state_dict(torch.load(load_model))
         
 
-    num_ep = 300
+    num_ep = 3000
     continuous_env = D2C(discrete_env= env, low_level_funciton= lambda x,y,z: x, rho = agent.rho, precise=True)
 
     agent.update_process.start()
@@ -112,7 +115,7 @@ if __name__ == '__main__':
     t00 = time.time()
     for e in range(num_ep):
         s = continuous_env.reset()
-        print(s)
+        # print(s)
         S = torch.tensor(s, dtype = torch.float32)
         
         undiscounted_rewards = []
@@ -140,8 +143,8 @@ if __name__ == '__main__':
             
             sp,R,done,info = continuous_env.step(omega.detach().numpy(), d)
             real_t = (time.time()-t00)
-            if agent.real_t + d > real_t:
-                time.sleep(np.float64(agent.real_t + d - real_t))
+            # if agent.real_t + d > real_t:
+            #     time.sleep(np.float64(agent.real_t + d - real_t))
             
             # print('R: ', R )
             # print((np.array(info['rewards']) * np.array(info['durations'])).sum())
@@ -171,9 +174,9 @@ if __name__ == '__main__':
                                                 'D_sigma': predictions['D_sigma'].detach().numpy(),
                                                 
                                                 }, agent.total_steps, walltime=agent.real_t)
-                writer.add_scalars('action', {'z_mu': z,
-                                                'z_sigma': predictions['z_sigma_target'][0],
-                                                }, agent.total_steps, walltime=agent.real_t)
+                # writer.add_scalars('action', {'z_mu': z,
+                #                                 'z_sigma': predictions['z_sigma_target'][0],
+                #                                 }, agent.total_steps, walltime=agent.real_t)
                 writer.add_scalar('Reward', R, agent.total_steps)
             
            

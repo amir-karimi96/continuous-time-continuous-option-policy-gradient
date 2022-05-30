@@ -4,6 +4,75 @@ from gym import spaces
 from gym.envs.classic_control.pendulum import PendulumEnv
 from gym.envs.classic_control import Continuous_MountainCarEnv
 
+import gym
+
+class CT_open_drawer:
+    def __init__(self,dt = 0.04) -> None:
+        
+        self.env = gym.make('open_drawer-state-v0')#, render_mode='human')
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.DT = 0.04
+        self.dt = 0.04
+        self.episode_length = 100
+        self.counter = 0
+
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        self.DT = 0.04
+        self.dt = 0.04
+        return self.env.reset()
+
+    def step(self,action,d=None):
+
+        self.counter +=1 
+        obs, reward, done, info = self.env.step(action)
+        
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return obs, reward, done, info
+
+class CT_close_drawer:
+    def __init__(self,dt = 0.05) -> None:
+        
+        self.env = gym.make('close_drawer-state-v0')#, render_mode='human')
+        self.observation_space = self.env.observation_space
+        self.action_space = self.env.action_space
+        self.DT = dt
+        self.dt = dt
+        self.episode_length = int(5 / dt) 
+        self.counter = 0
+
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        # self.DT = 0.04
+        self.dt = self.DT
+        return self.env.reset()
+
+    def step(self,action,d=None):
+
+        self.counter +=1 
+        action[-1] = 1
+        obs, reward, done, info = self.env.step(action)
+        reward = reward / self.DT
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return obs, reward, done, info
+
+
+
 class CT_mountain_car(Continuous_MountainCarEnv):
     def __init__(self, dt=0.01):
         self.DT = dt

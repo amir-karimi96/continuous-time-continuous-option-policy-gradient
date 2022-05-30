@@ -10,7 +10,7 @@ def rbf(centers, width):
     return lambda x: b(x) / np.sum(b(x), axis=1, keepdims=True)  # eq 8
 
 class sub_policy:
-    def __init__(self, low_level_function_choice, low_level_action_dim, n_features= 5) -> None:
+    def __init__(self, low_level_function_choice, low_level_action_dim, n_features= 1) -> None:
         self.low_level_action_dim = low_level_action_dim
         self.n_features = n_features
         self.low_level_function = self.__getattribute__(low_level_function_choice)

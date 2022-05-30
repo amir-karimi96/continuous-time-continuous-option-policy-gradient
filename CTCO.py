@@ -2,7 +2,7 @@
 
 import torch 
 import numpy as np
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
+from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car, CT_close_drawer
 import gym
 import argparse
 import yaml
@@ -18,7 +18,10 @@ import os
 from multiprocessing import Queue
 import multiprocessing
 from sub_policies import sub_policy
-
+try:
+    import rlbench.gym
+except:
+    pass
 # Writer will output to ./runs/ directory by default
 parser = argparse.ArgumentParser()
 parser.add_argument('--ID',default=0,type=int, help='param ID ')
@@ -74,8 +77,8 @@ if __name__ == '__main__':
     env.seed(0)
     state_dim = len(env.observation_space.sample())
     action_dim = len(env.action_space.sample())
-    config['action_high'] = env.action_space.high
-    config['action_low'] = env.action_space.low
+    config['action_high'] = env.action_space.high[0]
+    config['action_low'] = env.action_space.low[0]
     config['state_dim'] = state_dim
     config['env_dt'] = env.dt
     # config['writer'] = writer
@@ -101,7 +104,8 @@ if __name__ == '__main__':
     agent = COCT_SAC_async(config, RB_sample_queue, agent_info_queue)
        
     
-    low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=param['z_dim']).low_level_function
+    # low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=param['z_dim']).low_level_function
+    low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=int(param['z_dim']//action_dim)).low_level_function
 
     num_ep = 500
     continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=True)

@@ -1597,7 +1597,7 @@ class SAC_async:
         self.RB = RLDataset(D)
 
         # self.z2omega = lambda x: x
-        self.update_process = multiprocessing.Process(target=self.update_process_target, args=(RB_sample_queue,A_Q,config))
+        self.update_process = multiprocessing.Process(target=self.update_process_target, args=(RB_sample_queue,A_Q,config), daemon=True)
 
 
     def update_process_target(self,R_sample_Q,A_Q,config):
