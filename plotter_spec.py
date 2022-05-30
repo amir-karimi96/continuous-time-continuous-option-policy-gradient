@@ -27,7 +27,7 @@ with open('{}/{}/config_base.yaml'.format(exps_dir, exp_name),'r') as file:
 
 fig = plt.figure()
 
-ax = [fig.add_subplot(3, 1, 1), fig.add_subplot(3, 1, 2), fig.add_subplot(3, 1, 3)]
+ax = [fig.add_subplot(1, 1, 1)]#, fig.add_subplot(3, 1, 2), fig.add_subplot(3, 1, 3)]
 
 D = [ [] for i in range(num_params)] # list for data
 D_time = [ [] for i in range(num_params)] # list for data_time
@@ -111,9 +111,10 @@ for i,d in enumerate(D):
                                 statistic='mean', 
                                 bins=7200//60, 
                                 range=(0, 7200))
+        #print(i,len(j), mean_stat.statistic)
         runs_list.append(mean_stat.statistic)
     runs_list = np.array(runs_list)
-
+    print(i,runs_list[:,100])
     w = args.window
     R_mean = runs_list.mean(axis = 0)
     R_mean_lsit.append(R_mean)
@@ -129,34 +130,36 @@ for i,d in enumerate(D):
     label = ''
     # for k in P[i]:
     #   label +=  str(k) + '_' +str(P[i][k]) + '_' 
-    label = 'config_{}'.format(i)
+    label = 'freq={}'.format(1/configs[i]['param']['env_dt'])
     # if i in [4,6,7,15]:
-    p = ax[0].plot(R_smoothed, label = label)
-    ax[0].fill_between(range(R_smoothed.shape[0]), R_smoothed-R_std_smoothed, R_smoothed+R_std_smoothed, alpha = 0.3, color = p[0].get_color())
-
+    p = ax[0].plot(R_mean, label = label)
+    ax[0].fill_between(range(R_mean.shape[0]), R_mean-R_std, R_mean+R_std, alpha = 0.3, color = p[0].get_color())
+    
 
 # store results
 
 result['final_perfs'] = final_perf
 result['final_perf_stds'] = final_er
 result['auc_perf'] = auc_perf
-# ax[0].legend()
+ax[0].legend()
 
 final_perf = np.array(final_perf)
-ax[0].set_xlabel('time-steps')
-ax[0].set_ylabel('Avg Reward')
+ax[0].set_xlabel('wall time (min)')
+ax[0].set_ylabel('Avg Return')
 
 # ax[0].set_ylim([-1,0])
 # ax[1].set_ylim([-1,0])
 
-ax[1].errorbar(range(len(configs)), final_perf, final_er, fmt='o', color='black',
-             ecolor='lightgray', elinewidth=3, capsize=0)
+# ax[1].errorbar(range(len(configs)), final_perf, final_er, fmt='o', color='black',
+#              ecolor='lightgray', elinewidth=3, capsize=0)
 #ax[0].set_yscale("log")
 #ax[1].set_yscale("log")
 
 
 #plt.suptitle('N_actions = 10, N_modes = 4')
 plt.savefig('{}/{}/{}.png'.format(exps_dir, exp_name,exp_name))
+
+plt.savefig('{}/{}/{}.pdf'.format(exps_dir, exp_name,exp_name))
 # np.save('/home/amirk96/projects/def-ashique/amirk96/CTCO/Experiment_results/data/{}.npy'.format(exp_name ), result)
 
 def VS(performance_vector ,variable):
@@ -195,6 +198,7 @@ def plot_():
     ax[-1,-1].legend()
     plt.tight_layout()
     plt.savefig('{}/{}/{}_spec.png'.format(exps_dir, exp_name,exp_name))
+    plt.savefig('{}/{}/{}_spec.pdf'.format(exps_dir, exp_name,exp_name))
 
     
 plot_()

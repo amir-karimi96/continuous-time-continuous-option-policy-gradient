@@ -88,6 +88,7 @@ for i,d in enumerate(D):
     # d = np.concatenate(list(d),axis=1)
     # print(d.shape)
     w = args.window
+    # print(i,d)
     R_mean = d.mean(axis = 0)
     
     R_std = d.std(axis = 0,ddof=1)/np.sqrt(d.shape[0])
