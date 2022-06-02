@@ -100,17 +100,19 @@ auc_er = []
 
 R_mean_lsit = []
 R_std_list = []
-
+MAX_TIME = 14400
 for i,d in enumerate(D):
     #print(d.shape)
     # d = np.concatenate(list(d),axis=1)
     # print(d.shape)
     runs_list = []
+    T_min = 100
     for j,T in zip(D[i], D_time[i]):
         mean_stat = binned_statistic(T, j, 
                                 statistic='mean', 
-                                bins=7200//60, 
-                                range=(0, 7200))
+                                bins=MAX_TIME//60, 
+                                range=(0, MAX_TIME))
+        T_min = min(T_min, T[-1])
         #print(i,len(j), mean_stat.statistic)
         runs_list.append(mean_stat.statistic)
     runs_list = np.array(runs_list)
@@ -122,8 +124,9 @@ for i,d in enumerate(D):
     R_std_list.append(R_std)
     R_std_smoothed = np.convolve(R_std, np.ones(w), 'valid') / w
     R_smoothed = np.convolve(R_mean, np.ones(w), 'valid') / w
-    final_perf.append(R_smoothed[-1])
-    final_er.append(R_std_smoothed[-1])
+    N_ind = np.isnan(R_smoothed).argmax()
+    final_perf.append(R_smoothed[N_ind-1])
+    final_er.append(R_std_smoothed[N_ind-1])
     
     auc_perf.append(R_mean.sum())
     
@@ -131,6 +134,7 @@ for i,d in enumerate(D):
     # for k in P[i]:
     #   label +=  str(k) + '_' +str(P[i][k]) + '_' 
     label = 'freq={}'.format(1/configs[i]['param']['env_dt'])
+    # label = 'z_dim={}'.format(configs[i]['param']['z_dim'])
     # if i in [4,6,7,15]:
     p = ax[0].plot(R_mean, label = label)
     ax[0].fill_between(range(R_mean.shape[0]), R_mean-R_std, R_mean+R_std, alpha = 0.3, color = p[0].get_color())
@@ -160,7 +164,7 @@ ax[0].set_ylabel('Avg Return')
 plt.savefig('{}/{}/{}.png'.format(exps_dir, exp_name,exp_name))
 
 plt.savefig('{}/{}/{}.pdf'.format(exps_dir, exp_name,exp_name))
-# np.save('/home/amirk96/projects/def-ashique/amirk96/CTCO/Experiment_results/data/{}.npy'.format(exp_name ), result)
+np.save('{}/{}/{}.npy'.format(exps_dir, exp_name,exp_name), result)
 
 def VS(performance_vector ,variable):
     best_ind_list = []

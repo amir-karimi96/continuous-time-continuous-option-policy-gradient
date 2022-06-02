@@ -1224,7 +1224,7 @@ class COCT_SAC_async:
                 self.RB.notify(s=sample['s'], sp=sample['sp'], r=sample['r'], done_not_max=sample['done_not_max'], done=sample['done'],
                         z=sample['z'], 
                         D=sample['D'], d=sample['d'])
-                print('RB: ', self.RB.real_size)
+                # print('RB: ', self.RB.real_size)
             # tt = time.time()
             # time.sleep(0.1)
 
@@ -1619,7 +1619,7 @@ class SAC_async:
             self.update_async(A_Q,counter) 
     
     def update_async(self,A_Q,counter):
-        if self.RB.real_size > 1 * self.config['param']['batch_size']:
+        if self.RB.real_size > 1 * self.config['param']['batch_size'] and self.RB.real_size > 60 / self.config['param']['env_dt']:
             # print('update') 
             data = self.RB.get_minibatch(size = self.config['param']['batch_size'])
             

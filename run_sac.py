@@ -9,10 +9,6 @@ from sub_policies import sub_policy
 from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
 from torch.utils.tensorboard import SummaryWriter
 from agents import *
-try:
-    import rlbench.gym
-except:
-    pass
 
 
 print('imports done')
@@ -49,11 +45,11 @@ param = config['param']
 config_name = 'config_{}'.format(config['param_ID'])
 
 env = globals()[param['env']](dt=param['env_dt'])
-# env.seed(0)
+env.seed(0)
 config['state_dim'] = len(env.observation_space.sample())
 action_dim = len(env.action_space.sample())
-config['action_high'] = env.action_space.high[0]
-config['action_low'] = env.action_space.low[0]
+config['action_high'] = env.action_space.high
+config['action_low'] = env.action_space.low
 config['env_dt'] = env.dt
 if param['log_level'] >= 1:
     while True:
@@ -72,11 +68,9 @@ if param['async']:
 else:
     agent = globals()[param['agent']](config)
 
-low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=int(param['z_dim']//action_dim)).low_level_function
+low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=param['z_dim']).low_level_function
 num_ep = 500
-
-
-continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=False)
+continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=True)
 
 
 # functions
@@ -157,26 +151,27 @@ if __name__ == '__main__':
             predictions = agent.actor_network(S)
 
             # sample z and duration
-            z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
+            if agent.real_t >= 60:
+                z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
+            else:
+                z = torch.tensor(env.action_space.sample(), dtype = torch.float32)
             D, _ = agent.get_duration(predictions['D_mu'], predictions['D_sigma'])
-            
+            # print(agent.total_steps,z, D)
             # set step duration to duration
             d = D.detach().numpy()[0]
-            # print(z,D)
+
             # interact with continuous environment for duration d executing z
             sp, R, done, info = continuous_env.step(z.detach().numpy(), d)
             agent.total_steps += 1
 
-
-
             # delay d if realtime and simulated
             program_real_time = time.time() - start_time
             if param['simulated'] and param['real_time']:
-                delay(np.array(info['durations']).sum(), environment_real_time=environment_real_time, program_real_time=program_real_time)
-
-            # set elapsed time it may be less tha D because of episode termination
-            environment_real_time += np.array(info['durations']).sum()
-            agent.real_t += np.array(info['durations']).sum()
+                delay(d, environment_real_time=environment_real_time, program_real_time=program_real_time)
+            
+            # set elapsed time
+            environment_real_time += d
+            agent.real_t += d
 
             # apply duration penalty
             R -= param['Duration_penalty_const']
