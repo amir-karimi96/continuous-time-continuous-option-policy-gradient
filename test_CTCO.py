@@ -6,7 +6,7 @@ import os
 import argparse
 import yaml
 from sub_policies import sub_policy
-from env_wrapper import  *#D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car, CT_sine, CT_sine_dense, CT_sine_vel
+from env_wrapper import *# D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car, CT_sine, CT_sine_dense, CT_sine_vel
 from torch.utils.tensorboard import SummaryWriter
 from agents import *
 try:
@@ -49,13 +49,13 @@ with open(cfg_path) as file:
 param = config['param']
 config_name = 'config_{}'.format(config['param_ID'])
 
-env = globals()[param['env']](dt=param['env_dt'])
+env = globals()[param['env']](dt=np.float32(param['env_dt']))
 # env.seed(0)
 config['state_dim'] = len(env.observation_space.sample())
 action_dim = len(env.action_space.sample())
 config['action_high'] = env.action_space.high[0]
 config['action_low'] = env.action_space.low[0]
-config['env_dt'] = env.dt
+config['env_dt'] = np.float32(env.dt)
 if param['log_level'] >= 1:
     while True:
         time.sleep(run_ID / 10)
@@ -90,8 +90,9 @@ def add_data_to_RB(sample):
         RB_sample_queue.put(sample)
     else:
         agent.RB.notify(s=sample['s'], sp=sample['sp'], r=sample['r'], done_not_max=sample['done_not_max'], done=sample['done'],
-                        z=sample['z'], 
-                        D=sample['D'], d=sample['d'])
+                        z=sample['z'], z_prev = sample['z_prev'],
+                        tau = sample['tau'], tau_prev = sample['tau_prev'], T = sample['T'],
+                        D=sample['D'], D_prev = sample['D_prev'], d=sample['d'])
             
 def log_data(data):
 
@@ -107,7 +108,7 @@ def log_data(data):
                                         'z_sigma': predictions['z_sigma_target'][0],
                                         }, agent.total_steps, walltime=agent.real_t)
         writer.add_scalar('Reward', data['Reward'], data['total_steps'])
-    
+        writer.add_scalar('beta', data['beta'], data['total_steps'])
         if param['async']:    
             if agent_info_queue.full():
                 stat_dict = agent_info_queue.get()
@@ -118,7 +119,8 @@ def log_data(data):
             stat_dict = data['agent_data']
             if data['agent_data'] is not None: 
                 for k, v in stat_dict.items():
-                    writer.add_scalar(k, v, data['total_steps'])    
+                    writer.add_scalar(k, v, data['total_steps'])
+                
     
     
     if data['done']:
@@ -158,25 +160,36 @@ if __name__ == '__main__':
         
         undiscounted_rewards = []
         durations = []
-        # print(environment_real_time)
+        
         # reset environment
         state = continuous_env.reset()
         S = torch.tensor(state, dtype = torch.float32)
+        z_prev = torch.zeros((param['z_dim'],))
+        tau = 0.
+        tau_prev = 0.
+        D_prev = torch.tensor([0.])
+        new_movement = 1
         while True:
             # get z and duration from agent
-            predictions = agent.actor_network(S)
-
-            # sample z and duration
-            z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
-            D, _ = agent.get_duration(predictions['D_mu'], predictions['D_sigma'])
+            predictions = agent.actor_network(S, z_prev, D_prev, torch.tensor([tau],dtype=torch.float32))
             
-            # set step duration to duration
-            d = D.detach().numpy()[0]
+            # # sample termination
+            T = torch.distributions.Categorical(torch.tensor([1-predictions['beta'], predictions['beta']])).sample()
+            # T = 0
+            if new_movement or T:
+                # sample z and duration
+                z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
+                D, _ = agent.get_duration(predictions['D_mu'], predictions['D_sigma'])
+                
+                tau = 0.
+                # print(z,D-0.2)
+            
+            # set step duration 
+            d = min((D-tau).detach().numpy()[0], agent.dt)
             # print(z,D)
             # interact with continuous environment for duration d executing z
-            sp, R, done, info = continuous_env.step(z.detach().numpy(), d)
+            sp, R, done, info = continuous_env.step(z.detach().numpy(), d, option_duration = D.detach().numpy()[0] )
             agent.total_steps += 1
-
 
 
             # delay d if realtime and simulated
@@ -187,18 +200,22 @@ if __name__ == '__main__':
             # set elapsed time it may be less tha D because of episode termination
             environment_real_time += np.array(info['durations']).sum()
             agent.real_t += np.array(info['durations']).sum()
+
             # apply duration penalty
-            R -= param['Duration_penalty_const']
-            
+            if new_movement:
+                R -= param['Duration_penalty_const']
+            new_movement = False
             # add data to replay buffer
             done_not_max = False
             if done:
                 if info['TimeLimit.truncated']==False:
                     done_not_max = True
-            
+            # print(S,R,z,done)
             sample = {'s':S.detach().numpy(), 'sp':sp, 'r':R, 'done_not_max':done_not_max, 'done':done,
-                        'z':z.detach().numpy(), 
-                        'D':D.detach().numpy(), 'd':d}
+                        'T':T,
+                        'z':z.detach().numpy(), 'z_prev':z_prev.detach().numpy(),
+                        'tau':tau, 'tau_prev':tau_prev,
+                        'D':D.detach().numpy(),'D_prev':D_prev.detach().numpy(), 'd':d}
             add_data_to_RB(sample)
 
             # update info for undiscounted return computation
@@ -212,24 +229,34 @@ if __name__ == '__main__':
                         start_update_time = 0. + environment_real_time
                     while agent.total_updates < config['param']['update_rate'] * (environment_real_time - start_update_time):
                         agent_data = agent.update()
-                    print(agent.total_updates / (environment_real_time - start_update_time+ 1e-4), agent.total_updates / program_real_time)
+                        # agent.total_updates +=1
+                    # print(agent.total_updates / (environment_real_time - start_update_time+ 1e-4), agent.total_updates / program_real_time)
 
             # log data
             data = {'agent_data': agent_data,
-            'D': D.detach().numpy(),
+                'D': D.detach().numpy(),
             'D_sigma': predictions['D_sigma'].detach().numpy(),
             'total_steps': agent.total_steps,
             'total_episodes': agent.total_episodes,
             'real_t': agent.real_t,
             'Reward': R, 
+            'beta': predictions['beta'].detach().numpy(),
             'undiscounted_rewards': undiscounted_rewards,
             'durations': durations,
             'done': done,
              }
             log_data(data)
-            # print(done)
+            
             if done:
                 agent.total_episodes += 1
                 break
+            z_prev = z
+            D_prev = D
+            tau_prev = tau
+            tau += np.array(info['durations']).sum()
+            tau = agent.dt * round(tau/agent.dt)
             S = torch.tensor(sp, dtype=torch.float32)
+            if tau + agent.dt > D:#agent.dt * round(D.detach().numpy()[0]/agent.dt):
+                new_movement = True
+            # print(tau, new_movement, )
 
