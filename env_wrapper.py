@@ -1,9 +1,8 @@
-import imp
 import numpy as np
 from gym import spaces
 from gym.envs.classic_control.pendulum import PendulumEnv
 from gym.envs.classic_control import Continuous_MountainCarEnv
-
+import matplotlib.pyplot as plt
 import gym
 
 class CT_open_drawer:
@@ -71,8 +70,6 @@ class CT_close_drawer:
                 info['TimeLimit.truncated'] = False
         return obs, reward, done, info
 
-
-
 class CT_mountain_car(Continuous_MountainCarEnv):
     def __init__(self, dt=0.01):
         self.DT = dt
@@ -117,7 +114,7 @@ class CT_mountain_car(Continuous_MountainCarEnv):
         reward = 0
         if done:
             reward = 100.0 * 0.01 / self.dt
-        reward-= (action[0]**2) *0.1
+        reward-= (action[0]**2) * 0.1
 
         self.state = np.array([position, velocity])
         s = self.state
@@ -196,7 +193,170 @@ class CT_pendulum_sparse(PendulumEnv):
 
         return s, r_sparse, done, info
         
+class CT_sine:
+    def __init__(self,dt = 0.05) -> None:
+        
+        self.action_space = spaces.Box(low=-1., high=1., shape=(1,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1., high=1., shape=(2,), dtype=np.float32)
+        self.DT = 0.05
+        self.dt = 0.05
+        self.list = []
+        self.episode_length = 20
+        self.counter = 0
+        
 
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        self.list = []
+        self.DT = 0.05
+        self.dt = 0.05
+        self.F = 1 #np.random.random()/2+0.5
+        self.A = 1#np.random.random()/2 + 0.5
+        self.phi = np.random.random() * np.pi
+        x = np.linspace(0,1,20)
+        self.traj = self.A * np.sin(2 * np.pi * x * self.F + self.phi)
+        return np.array([self.phi, 0.])
+
+    def step(self,action,d=None):
+
+        self.counter +=1 
+        self.list.append(action[0])
+        reward = 0
+        done = False
+        if self.counter == self.episode_length:
+            # print(np.array(self.list).shape)
+            error = np.abs((np.array(self.list) - self.traj)**2).mean(axis=-1)#/(self.A**2)
+            # print(error)
+            if error < 0.25:
+                reward = 1/self.dt
+                # plt.plot(self.list)
+                # plt.savefig('sine.png')
+                #print(np.array(self.list) - self.traj)
+            # reward = -error/self.dt
+
+            
+        info = {}
+        
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return np.array([self.phi, self.counter/ self.episode_length]), reward, done, info
+
+class CT_sine_vel:
+    def __init__(self,dt = 0.05) -> None:
+        
+        self.action_space = spaces.Box(low=-1., high=1., shape=(1,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1., high=1., shape=(3,), dtype=np.float32)
+        self.DT = 0.05
+        self.dt = 0.05
+        self.list = []
+        self.episode_length = 20
+        self.counter = 0
+        
+
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        self.list = []
+        self.DT = 0.05
+        self.dt = 0.05
+        self.F = 1 #np.random.random()/2+0.5
+        self.A = 1#np.random.random()/2 + 0.5
+        self.phi = (np.random.random() - 0.5) * 2 * np.pi
+        x = np.linspace(0,1,20)
+        self.traj = self.A * np.sin(2 * np.pi * x * self.F + self.phi)
+        self.x = self.traj[0]
+        return np.array([self.phi, 0., self.x])
+
+    def step(self,action,d=None):
+
+        self.counter +=1 
+        self.x += 2*np.pi *self.dt * action[0]
+        self.list.append(self.x)
+        reward = 0
+        done = False
+        if self.counter == self.episode_length:
+            # print(np.array(self.list).shape)
+            error = np.abs((np.array(self.list) - self.traj)**2).mean(axis=-1)#/(self.A**2)
+            # print(error)
+            if error < 0.25:
+                reward = 1/self.dt
+                # plt.plot(self.list)
+                # plt.savefig('sine.png')
+                #print(np.array(self.list) - self.traj)
+            # reward = -error/self.dt
+
+            
+        info = {}
+        
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return np.array([self.phi, self.counter/ self.episode_length, self.x]), reward, done, info
+
+class CT_sine_dense:
+    def __init__(self,dt = 0.05) -> None:
+        
+        self.action_space = spaces.Box(low=-1., high=1., shape=(1,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1., high=1., shape=(2,), dtype=np.float32)
+        self.DT = 0.05
+        self.dt = 0.05
+        self.list = []
+        self.episode_length = 20
+        self.counter = 0
+        
+
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        self.list = []
+        self.DT = 0.05
+        self.dt = 0.05
+        self.F = 1 #np.random.random()/2+0.5
+        self.A = 1#np.random.random()/2 + 0.5
+        self.phi = np.random.random() * np.pi
+        x = np.linspace(0,1,20)
+        self.traj = self.A * np.sin(2 * np.pi * x * self.F + self.phi)
+        return np.array([self.phi, self.counter/ self.episode_length])
+
+    def step(self,action,d=None):
+
+        self.counter +=1 
+        self.list.append(action[0])
+        reward = 0
+        done = False
+        if self.counter == self.episode_length:
+            # print(np.array(self.list).shape)
+            error = np.abs((np.array(self.list) - self.traj)**2).mean(axis=-1)#/(self.A**2)
+            # print(error)
+            if error < 0.25:
+                reward = 1/self.dt
+                # plt.plot(self.list)
+                # plt.savefig('sine.png')
+                #print(np.array(self.list) - self.traj)
+            # reward = -error/self.dt
+
+        reward = -(action[0] - self.traj[self.counter-1])**2
+        print(reward)
+        info = {}
+        
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return np.array([self.phi, self.counter/ self.episode_length]), reward, done, info
 
 class Env_test:
     def __init__(self) -> None:
@@ -256,13 +416,19 @@ class D2C:
 
     def get_continuous_reward(self, r, start_t, dt):
         return r/self.rho * (np.exp(-self.rho * start_t) - np.exp(-self.rho*(start_t + dt)))
+        # return dt * r * np.exp(-self.rho * start_t)
 
-    def step(self, A, duration ):
+    def step(self, A, duration , option_duration = None):
         ### inputs: A is the action (high or low) to be repeated
-        ###         d is the duration of continuous time-step
+        ###         duration is the duration of continuous time-step
+        ###         Duration is the duration of option, Note: it can be none means there is no termination checking 
         ### outputs: R is the integral of e^(-rho t)x r(t) over period d
         ###          S is the state at the end of continuous time-step
         ###          Done is true if terminal happend 
+        
+        if option_duration is None:
+            option_duration = duration
+        
         R = 0
         Info = {'rewards':[],
                 'durations': [],
@@ -276,7 +442,7 @@ class D2C:
             integration_steps = 1
         for i in range(integration_steps):
             
-            a = self.low_level_func(A, i * self.dt, duration)
+            a = self.low_level_func(A, i * self.dt, option_duration)
             s, r, done, info = self.env.step(a)
             if self.eval_mode:
                 f = self.env.render(mode='rgb_array')
@@ -291,7 +457,7 @@ class D2C:
         
         if self.precise:
             if d > 0:      
-                a = self.low_level_func(A, integration_steps * self.dt, duration)
+                a = self.low_level_func(A, integration_steps * self.dt, option_duration)
                 s, r, done, info = self.env.step(a, d)
                 if self.eval_mode:
                     f = self.env.render(mode='rgb_array')
@@ -302,3 +468,62 @@ class D2C:
             if done:
                 Info['TimeLimit.truncated'] =  info['TimeLimit.truncated']
         return (s, R, done, Info)
+
+class CT_stochastic_env:
+    def __init__(self,dt = 0.01) -> None:
+        
+        self.action_space = spaces.Box(low=-1., high=1., shape=(1,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-1., high=1., shape=(2,), dtype=np.float32)
+        self.DT = dt
+        self.dt = dt
+        self.episode_length = int(1./dt)
+        self.counter = 0
+        self.change_goal_prob = 1./(1.+0.3/dt)
+        
+        
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        
+        # self.DT = 0.1
+        self.dt = self.DT
+        self.goal = 2 * np.random.random() - 1
+        self.x = 0.0#0.2 * np.random.random() - 0.1
+        self.state = np.array([self.x, self.goal])
+        return self.state
+
+    def step(self,action,d=None):
+
+        self.counter +=1 
+        reward = 0
+        done = False
+        
+
+        self.x += action[0] * self.dt
+        if np.random.random() > (1-self.change_goal_prob):
+            print('changed', self.counter)
+            self.goal = 2 * np.random.random() - 1
+        self.state = np.array([self.x, self.goal])
+        reward = - (self.x - self.goal) ** 2
+
+        info = {}
+        
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return self.state, reward, done, info
+
+
+if __name__ == '__main__':
+    env = CT_stochastic_env()
+
+    s= env.reset()
+    for i in range(20):
+        a = env.action_space.sample()
+        s,r,done, info = env.step(a)
+        print(i,s,r,done, info)
+    # print(A, F)
