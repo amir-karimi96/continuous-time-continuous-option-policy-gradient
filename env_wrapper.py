@@ -6,6 +6,62 @@ import matplotlib.pyplot as plt
 import gym
 from gym.envs.mujoco import HalfCheetahEnv, HopperEnv
 
+try:
+    import franka_gym
+
+
+
+    import gym
+    from dm_control import suite
+    from dm_control.suite import ball_in_cup
+except:
+    pass
+class CT_dm:
+    def __init__(self, dt = 0.01) -> None:
+        self.env = suite.load(domain_name="ball_in_cup", task_name="catch")
+        self.observation_space = spaces.Box(low=-2., high=2., shape=(8,), dtype=np.float32)
+        action_spec = self.env.action_spec()
+        self.action_space = spaces.Box(low=action_spec.minimum, high=action_spec.maximum, shape=action_spec.shape, dtype=np.float32)
+
+        self.DT = dt
+        self.dt = dt
+        self.episode_length = int(10 / dt) 
+        self.counter = 0
+
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        # self.DT = 0.04
+        self.dt = self.DT
+        time_step = self.env.reset()
+        # time_step.reward, time_step.discount, time_step.observation
+        obs = np.concatenate((time_step.observation['position'], time_step.observation['velocity']))
+
+        return obs
+
+    def step(self, action,d=None):
+        self.counter +=1 
+        # action[-1] = 1
+        # print(action)
+        time_step = self.env.step(action)
+        # time_step.reward, time_step.discount, time_step.observation
+        # print(time_step.observation)
+        obs = np.concatenate((time_step.observation['position'], time_step.observation['velocity']))
+        reward = time_step.reward
+        info = {}
+        done = time_step.last()
+        # reward = reward / self.DT
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return obs, reward, done, info
+
+
+
 class CT_half_cheetah:
     def __init__(self, dt=0.05) -> None:
         self.env = HalfCheetahEnv()
@@ -139,7 +195,10 @@ class CT_close_drawer:
         # self.DT = 0.04
         self.dt = self.DT
         return self.env.reset()
-
+    
+    def render(self, mode):
+        return self.env.render(mode)
+    
     def step(self,action,d=None):
 
         self.counter +=1 
@@ -153,6 +212,7 @@ class CT_close_drawer:
             if done:
                 info['TimeLimit.truncated'] = False
         return obs, reward, done, info
+
 
 class CT_mountain_car(Continuous_MountainCarEnv):
     def __init__(self, dt=0.01):
@@ -244,7 +304,41 @@ class CT_pendulum(PendulumEnv):
             info['TimeLimit.truncated'] = True
 
         return s,r,done,info
+
         
+class CT_pendulum_smooth(PendulumEnv):
+    def __init__(self, g=10, dt=0.05):
+        super().__init__(g)
+        self.ep_time = 0
+        
+        self.DT = dt
+        
+        self.dt = self.DT
+        print(self.dt)
+
+    def reset(self):
+        self.dt = self.DT
+        self.ep_time = 0
+        self.u_prev = None
+        return super().reset()
+
+    def step(self, u, d=None):
+        if d is not None:
+            self.dt = d
+        else:
+            self.dt = self.DT
+        self.ep_time += self.dt
+        
+        s,r,done,info = super().step(u)
+        if self.u_prev is not None:
+            r -= 0.1 * np.abs(u-self.u_prev)[0] / self.dt
+        self.u_prev = u
+        if self.ep_time >= (10-1e-3):
+            done = True
+            info['TimeLimit.truncated'] = True
+
+        return s,r,done,info
+
 class CT_pendulum_sparse(PendulumEnv):
     def __init__(self, g=10):
         super().__init__(g)
