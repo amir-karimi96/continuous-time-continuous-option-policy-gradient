@@ -89,7 +89,7 @@ class COCT_actor_network(torch.nn.Module):
         if param['freez_beta']:
             self.beta.requires_grad_(False)
 
-    def forward(self,state, z_,D_, tau): #TODO add tau for beta 
+    def forward(self,state, z_,D_, tau): 
         # inputs:   current state
         #           previous option z_
         z_mu= self.actor_z_mu(state)
@@ -105,7 +105,7 @@ class COCT_actor_network(torch.nn.Module):
         D_sigma_target = self.actor_D_sigma_target(state)
         # print(1111)
         # print(state, z_, tau)
-        beta = 1.0 / ( 1.0 + self.beta(torch.cat((state, z_,D_, tau), dim=-1)) / self.config['env_dt'])
+        beta = 0.0 / ( 1.0 + self.beta(torch.cat((state, z_,D_, tau), dim=-1)) / self.config['env_dt'])
         # print(self.beta(torch.cat((state, z_, tau), dim=-1)))
         predictions = { 'beta': beta,
                         'z_mu':  z_mu ,
@@ -522,7 +522,7 @@ class COCT:
         Zs = torch.tensor(data['z'], dtype=torch.float32)
         # Ss_Zs_Taus_Ds = torch.cat((Ss,Zs,(0*Ds).detach(), Ds), dim=1)
         Ss_Zs_Ds_Taus = torch.cat((Ss,Zs, Ds,(0*Ds).detach()), dim=1)
-        current_Qs_D = self.critic(Ss_Zs_Ds_Taus)3
+        current_Qs_D = self.critic(Ss_Zs_Ds_Taus)
 
         D_loss =  k * (self.alpha.detach() * log_prob_Ds - current_Qs_D) # TODO check
 
@@ -1365,13 +1365,13 @@ class COCT_SAC_async:
                                 torch.nn.Linear(param['critic_NN_nhid'], param['critic_NN_nhid']), getattr(torch.nn, param['critic_NN_gate'])(),
                                 torch.nn.Linear(param['critic_NN_nhid'], 1))
 
-        # if param['critic_NN_gate'] == 'ReLU':
-        #     torch.nn.init.kaiming_normal_(self.critic[-1].weight, nonlinearity='relu') 
-        #     torch.nn.init.kaiming_normal_(self.critic[-3].weight, nonlinearity='relu') 
-        #     torch.nn.init.kaiming_normal_(self.critic[-5].weight, nonlinearity='relu') 
-        #     self.critic[-1].bias.data[:] = 0*torch.rand(self.critic[-1].bias.data[:].shape)-0
-        #     self.critic[-3].bias.data[:] = 2*torch.rand(self.critic[-3].bias.data[:].shape)-1
-        #     self.critic[-5].bias.data[:] = 2*torch.rand(self.critic[-5].bias.data[:].shape)-1
+        if param['critic_NN_gate'] == 'ReLU':
+            torch.nn.init.kaiming_normal_(self.critic[-1].weight, nonlinearity='relu') 
+            torch.nn.init.kaiming_normal_(self.critic[-3].weight, nonlinearity='relu') 
+            torch.nn.init.kaiming_normal_(self.critic[-5].weight, nonlinearity='relu') 
+            self.critic[-1].bias.data[:] = 0*torch.rand(self.critic[-1].bias.data[:].shape)-0
+            self.critic[-3].bias.data[:] = 2*torch.rand(self.critic[-3].bias.data[:].shape)-1
+            self.critic[-5].bias.data[:] = 2*torch.rand(self.critic[-5].bias.data[:].shape)-1
 
         self.critic_target.load_state_dict(self.critic.state_dict())
 
@@ -1514,7 +1514,7 @@ class COCT_SAC_async:
         
         log_probs = log_probs_ZPs + log_probs_DPs
         # print(log_probs_ZPs )
-        target_V = self.critic(SPs_ZPs_DPs) - self.alpha.detach() * log_probs # TODO like sac add another critic network
+        target_V = self.critic_target(SPs_ZPs_DPs) - self.alpha.detach() * log_probs # TODO like sac add another critic network
         
 
         target_Qs = Rs + (1 - dones_not_max) * torch.exp(-self.rho * ds) *  target_V 
@@ -1722,7 +1722,7 @@ class SAC_async:
     def __init__(self,config, RB_sample_queue, A_Q) -> None:
         # self.writer = config['writer']
         self.config = config
-        
+        self.save_time = 0
         # self.rho = - np.log(config['param']['discount']) / self.config['env_dt']
         self.rho = 0.4 # its good for 10 sec episodes TODO better explain why.
         param = config['param']
