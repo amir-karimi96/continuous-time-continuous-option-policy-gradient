@@ -155,7 +155,7 @@ if __name__ == '__main__':
         agent.update_process.start()
     max_experiment_time = param['max_experiment_time']
     agent_data = None
-    torch.manual_seed(run_ID * 1000) 
+    torch.manual_seed(run_ID * 1000)
     while environment_real_time < max_experiment_time:
         
         undiscounted_rewards = []
