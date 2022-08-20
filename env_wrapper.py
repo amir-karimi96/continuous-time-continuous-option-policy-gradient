@@ -4,6 +4,90 @@ from gym.envs.classic_control.pendulum import PendulumEnv
 from gym.envs.classic_control import Continuous_MountainCarEnv
 import matplotlib.pyplot as plt
 import gym
+from gym.envs.mujoco import HalfCheetahEnv, HopperEnv
+
+class CT_half_cheetah:
+    def __init__(self, dt=0.05) -> None:
+        self.env = HalfCheetahEnv()
+        self.action_space = self.env.action_space
+        self.observation_space = self.env.observation_space
+        self.reward_range = self.env.reward_range
+        self.metadata = self.env.metadata
+        # self.dt = dt
+        self.DT = dt
+        self.dt = self.DT
+        self.env.model.opt.timestep = dt / self.env.frame_skip
+        self.counter = 0
+        self.max_episode_length = int(1000 * 0.05 / dt)
+        
+    def set_dt(self, dt):
+        self.DT = dt
+        self.dt = self.DT
+        self.env.model.opt.timestep = dt / self.env.frame_skip
+        self.max_episode_length = int(1000 * 0.05 / dt)
+
+    def step(self,action):
+        
+        ob, reward, done, info = self.env.step(action)
+        # print(reward)
+        self.counter += 1
+        if self.counter >= self.max_episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        # print(self.counter)
+        return ob, reward , done, info
+
+    def reset(self):
+        self.counter = 0
+        return self.env.reset()
+    def seed(self, i):
+        self.env.seed(i)
+
+class CT_hopper:
+    def __init__(self, dt=0.008) -> None:
+        self.env = HopperEnv()
+        self.action_space = self.env.action_space
+        self.observation_space = self.env.observation_space
+        self.reward_range = self.env.reward_range
+        self.metadata = self.env.metadata
+        # self.dt = dt
+        self.DT = dt
+        self.dt = self.DT
+        
+        self.env.model.opt.timestep = dt / self.env.frame_skip
+        self.counter = 0
+        self.max_episode_length = int(1000 * 0.008 / dt)
+        print(self.max_episode_length)
+    def set_dt(self, dt):
+        self.DT = dt
+        self.dt = self.DT
+        self.env.model.opt.timestep = dt / self.env.frame_skip
+        self.max_episode_length = int(1000 * 0.008 / dt)
+
+    def step(self,action):
+        
+        ob, reward, done, info = self.env.step(action)
+        # print(reward)
+        self.counter += 1
+        if self.counter >= self.max_episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        # print(self.counter)
+        return ob, reward , done, info
+
+    def reset(self):
+        self.counter = 0
+        return self.env.reset()
+    def seed(self, i):
+        self.env.seed(i)
+
+
 
 class CT_open_drawer:
     def __init__(self,dt = 0.04) -> None:
@@ -519,11 +603,16 @@ class CT_stochastic_env:
 
 
 if __name__ == '__main__':
-    env = CT_stochastic_env()
-
+    env = CT_hopper(dt = 0.008)
+    env2 = gym.make('Hopper-v2')
+    env2.seed(0)
+    env.seed(0)
     s= env.reset()
-    for i in range(20):
+    env2.reset()
+    for i in range(10):
         a = env.action_space.sample()
-        s,r,done, info = env.step(a)
-        print(i,s,r,done, info)
+        s1,r1,done, info = env.step(a)
+        s2,r2,done, info = env2.step(a)
+        print(s1-s2,r1-r2)
     # print(A, F)
+    
