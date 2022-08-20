@@ -9,6 +9,10 @@ from sub_policies import sub_policy
 from env_wrapper import *# D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
 from torch.utils.tensorboard import SummaryWriter
 from agents import *
+try:
+    import rlbench.gym
+except:
+    pass
 
 
 print('imports done')
