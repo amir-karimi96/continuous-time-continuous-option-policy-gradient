@@ -13,7 +13,10 @@ try:
     import rlbench.gym
 except:
     pass
-
+try:
+    from franka_env import *
+except:
+    pass
 
 print('imports done')
 os.environ['OMP_NUM_THREADS'] = '1'
@@ -41,16 +44,24 @@ args = parser.parse_args()
 run_ID = args.ID
 load_model = args.load_model
 cfg_path = args.config
-torch.manual_seed(run_ID * 1000) 
 result_path = args.result_path
 with open(cfg_path) as file:
     config = yaml.full_load(file)
 
 param = config['param']
+if 'rank' in param.keys():
+    rank = param['rank']
+else:
+    rank = 1000
+
+torch.manual_seed(run_ID * rank) 
+
+
 config_name = 'config_{}'.format(config['param_ID'])
 
+
 env = globals()[param['env']](dt=param['env_dt'])
-# env.seed(0)
+
 config['state_dim'] = len(env.observation_space.sample())
 action_dim = len(env.action_space.sample())
 config['action_high'] = env.action_space.high[0]
@@ -76,7 +87,7 @@ agent = globals()[param['agent']](config, RB_sample_queue, agent_info_queue)
 low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=int(param['z_dim']//action_dim)).low_level_function
 num_ep = 500
 
-
+env.seed(rank * run_ID)
 continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=False)
 
 
@@ -103,9 +114,9 @@ def log_data(data):
                                         'D_sigma': data['D_sigma'],
                                         
                                         }, data['total_steps'], walltime=data['real_t'])
-        writer.add_scalars('action', {'z_mu': z,
-                                        'z_sigma': predictions['z_sigma_target'][0],
-                                        }, agent.total_steps, walltime=agent.real_t)
+        # writer.add_scalars('action', {'z_mu': z,
+        #                                 'z_sigma': predictions['z_sigma_target'][0],
+        #                                 }, agent.total_steps, walltime=agent.real_t)
         writer.add_scalar('Reward', data['Reward'], data['total_steps'])
     
         if param['async']:    
@@ -124,6 +135,7 @@ def log_data(data):
     if data['done']:
         
         Returns.append((np.array(data['undiscounted_rewards']) * np.array(data['durations'])).sum())
+        print(np.array(data['undiscounted_rewards']).sum() , Returns[-1])
         discounts = np.exp(-agent.rho) ** np.matmul(np.array(data['durations']), 1-np.tri(len(data['durations']), len(data['durations'])))
         #print(discounts)
         Returns_discounted.append((np.array(data['undiscounted_rewards']) * np.array(data['durations']) * discounts).sum())
@@ -153,7 +165,6 @@ if __name__ == '__main__':
         agent.update_process.start()
     max_experiment_time = param['max_experiment_time']
     agent_data = None
-    torch.manual_seed(run_ID * 1000) 
     while environment_real_time < max_experiment_time:
         
         undiscounted_rewards = []
@@ -165,14 +176,17 @@ if __name__ == '__main__':
         while True:
             # get z and duration from agent
             predictions = agent.actor_network(S)
-
+            # torch.manual_seed(1000) 
             # sample z and duration
-            z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
             D, _ = agent.get_duration(predictions['D_mu'], predictions['D_sigma'])
+            # D, _ = agent.get_duration(0.6+0.0*predictions['D_mu'], 0.5+0.0*predictions['D_sigma'])
+            # D, _ = agent.get_duration(torch.tensor([0.6]),torch.tensor([0.6]))
+            z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
             
             # set step duration to duration
             d = D.detach().numpy()[0]
-            # print(z,D)
+            # print(S)
+            # print(D)
             # interact with continuous environment for duration d executing z
             sp, R, done, info = continuous_env.step(z.detach().numpy(), d)
             agent.total_steps += 1
@@ -212,7 +226,7 @@ if __name__ == '__main__':
                         start_update_time = 0. + environment_real_time
                     while agent.total_updates < config['param']['update_rate'] * (environment_real_time - start_update_time):
                         agent_data = agent.update()
-                    print(agent.total_updates / (environment_real_time - start_update_time+ 1e-4), agent.total_updates / program_real_time)
+                    # print(agent.total_updates / (environment_real_time - start_update_time+ 1e-4), agent.total_updates / program_real_time)
 
             # log data
             data = {'agent_data': agent_data,
