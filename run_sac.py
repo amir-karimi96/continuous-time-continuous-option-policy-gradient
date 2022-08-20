@@ -6,7 +6,7 @@ import os
 import argparse
 import yaml
 from sub_policies import sub_policy
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
+from env_wrapper import *# D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
 from torch.utils.tensorboard import SummaryWriter
 from agents import *
 
@@ -21,8 +21,9 @@ RB_sample_queue = Queue(maxsize=100)
 agent_info_queue = Queue(maxsize=1)
 
 Returns = []
+Returns_discounted = []
 Returns_times = []
-
+save_time = 0
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--ID',default=0,type=int, help='param ID ')
@@ -50,6 +51,7 @@ config['state_dim'] = len(env.observation_space.sample())
 action_dim = len(env.action_space.sample())
 config['action_high'] = env.action_space.high
 config['action_low'] = env.action_space.low
+# config['action_dim'] = action_dim
 config['env_dt'] = env.dt
 if param['log_level'] >= 1:
     while True:
@@ -60,17 +62,17 @@ if param['log_level'] >= 1:
         except:
             print("An exception occurred")
     
-if param['async'] == False:
-    config['writer'] = writer
+    if param['async'] == False:
+        config['writer'] = writer
     
-if param['async']:
-    agent = globals()[param['agent']](config, RB_sample_queue, agent_info_queue)
-else:
-    agent = globals()[param['agent']](config)
+# if param['async']:
+agent = globals()[param['agent']](config, RB_sample_queue, agent_info_queue)
+# else:
+#     agent = globals()[param['agent']](config)
 
 low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=param['z_dim']).low_level_function
 num_ep = 500
-continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=True)
+continuous_env = D2C(discrete_env= env, low_level_funciton = low_level_function, rho = agent.rho, precise=False)
 
 
 # functions
@@ -82,7 +84,7 @@ def add_data_to_RB(sample):
     if param['async']:
         RB_sample_queue.put(sample)
     else:
-        agent.RB.notify(s=sample['S'], sp=sample['sp'], r=sample['R'], done_not_max=sample['done_not_max'], done=sample['done'],
+        agent.RB.notify(s=sample['s'], sp=sample['sp'], r=sample['r'], done_not_max=sample['done_not_max'], done=sample['done'],
                         z=sample['z'], 
                         D=sample['D'], d=sample['d'])
             
@@ -109,21 +111,27 @@ def log_data(data):
                     writer.add_scalar(k, v, data['total_steps'])
             
     
-    
     if data['done']:
         
         Returns.append((np.array(data['undiscounted_rewards']) * np.array(data['durations'])).sum())
+        discounts = np.exp(-agent.rho) ** np.matmul(np.array(data['durations']), 1-np.tri(len(data['durations']), len(data['durations'])))
+        #print(discounts)
+        Returns_discounted.append((np.array(data['undiscounted_rewards']) * np.array(data['durations']) * discounts).sum())
         Returns_times.append(environment_real_time)
         if param['log_level'] >= 1:
             writer.add_scalar('Return_discrete', Returns[-1], data['total_episodes'])
 
-        if data['total_episodes'] % param['save_interval'] == 0:
-            # print('{} steps/s'.format(agent.total_steps//(time.time()-t0)))
-            log_data['data'] = np.array(Returns)
-            log_data['data_wall_time'] = np.array(Returns_times)
-            np.save('{}/{}/data/{}.npy'.format(result_path,config_name, run_ID), log_data)
-        
-            agent.save_actor(filename='{}/{}/model/{}_{}.model'.format(result_path, config_name, run_ID, data['total_episodes']))
+    if (environment_real_time - param['save_interval']) > agent.save_time :
+        agent.save_time = environment_real_time
+        # print('{} steps/s'.format(agent.total_steps//(time.time()-t0)))
+        log_data['data'] = np.array(Returns)
+        log_data['returns_discounted'] = np.array(Returns_discounted)
+        log_data['data_wall_time'] = np.array(Returns_times)
+        np.save('{}/{}/data/{}.npy'.format(result_path,config_name, run_ID), log_data)
+    
+        agent.save_actor(filename='{}/{}/model/{}_{}.model'.format(result_path, config_name, run_ID, int(param['save_interval'] * (agent.save_time // param['save_interval']))))
+            
+
             
 
 if __name__ == '__main__':
@@ -131,6 +139,8 @@ if __name__ == '__main__':
     
     
     environment_real_time = 0
+    save_time = 0
+    start_update_time = None
     program_real_time = 0
     start_time = time.time()
     if param['async']:
@@ -191,9 +201,17 @@ if __name__ == '__main__':
             undiscounted_rewards.extend(info['rewards'])
             durations.extend(info['durations'])
             
-            # update agent if async
+            # update agent if sync
             if param['async']==False:
-                agent.update()
+                if agent.RB.real_size > 1 * config['param']['batch_size'] and agent.RB.real_size > 60 / config['param']['env_dt']:
+                    if start_update_time is None:
+                        start_update_time = 0. + environment_real_time
+                        # print('here: ', start_update_time, environment_real_time)
+                    # print((environment_real_time - start_update_time))
+                    while agent.total_updates < config['param']['update_rate'] * (environment_real_time - start_update_time):
+                        agent.update()
+                        # print(agent.total_updates)
+                # print(environment_real_time,  program_real_time)
 
             # log data
             data = {'D': D.detach().numpy(),
