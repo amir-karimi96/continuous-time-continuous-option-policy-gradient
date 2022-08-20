@@ -62,11 +62,15 @@ for p in range(num_params):
             if d['data'].shape[0] == 1:
                 print(int(d['config_ID']), i)
             D[int(d['config_ID'])].append(d['data'])
+            # D[int(d['config_ID'])].append(d['returns_discounted'])
+            
             D_time[int(d['config_ID'])].append(d['data_wall_time'])
             
             if SR:
                 A[int(d['config_ID'])].append(d['action_features'])
             P[int(d['config_ID'])]=d['config']
+        
+
 
 for i in range(num_params):
     lens = [j.shape[0] for j in D[i]]
@@ -76,7 +80,7 @@ for i in range(num_params):
     min_len = min(lens)
     min_time = min(times)
     #len = min(len, 250000)
-    # print(min_len)
+    print(i,np.argmin(lens), lens)
     D[i] = [j[:np.where( T <= min_time)[0][-1]] for j,T in zip(D[i], D_time[i])] 
     # print(np.array(D_time[i]))
     # print(D_time[i][0])
@@ -97,6 +101,9 @@ final_er = []
 auc_perf = []
 auc_er = []
 
+Retruns_vs_time = []
+Retruns_error_vs_time = []
+Times = []
 
 R_mean_lsit = []
 R_std_list = []
@@ -120,7 +127,8 @@ for i,d in enumerate(D):
     w = args.window
     R_mean = runs_list.mean(axis = 0)
     R_mean_lsit.append(R_mean)
-    R_std = runs_list.std(axis = 0,ddof=1)/np.sqrt(runs_list.shape[0])
+    ###
+    R_std = 1.96 * runs_list.std(axis = 0,ddof=1)/np.sqrt(runs_list.shape[0])
     R_std_list.append(R_std)
     R_std_smoothed = np.convolve(R_std, np.ones(w), 'valid') / w
     R_smoothed = np.convolve(R_mean, np.ones(w), 'valid') / w
@@ -129,10 +137,13 @@ for i,d in enumerate(D):
     final_er.append(R_std_smoothed[N_ind-1])
     
     auc_perf.append(R_mean.sum())
-    
+    Retruns_vs_time.append(R_mean)
+    Retruns_error_vs_time.append(R_std)
+    # Times.append()
     label = ''
     # for k in P[i]:
     #   label +=  str(k) + '_' +str(P[i][k]) + '_' 
+    # print(configs[i]['param']['env_dt'])
     label = 'freq={}'.format(1/configs[i]['param']['env_dt'])
     # label = 'z_dim={}'.format(configs[i]['param']['z_dim'])
     # if i in [4,6,7,15]:
@@ -145,6 +156,10 @@ for i,d in enumerate(D):
 result['final_perfs'] = final_perf
 result['final_perf_stds'] = final_er
 result['auc_perf'] = auc_perf
+result['Returns_vs_time'] = Retruns_vs_time
+result['Returns_error_vs_time'] = Retruns_error_vs_time
+
+result['configs'] = configs
 ax[0].legend()
 
 final_perf = np.array(final_perf)
@@ -183,7 +198,7 @@ def plot_():
     z_dim_list = config_base['experiment']['params']['z_dim']
     env_dt_list = config_base['experiment']['params']['env_dt']
     c = np.ndarray((len(penalty_list), len(z_dim_list)),dtype=list)
-    fig, ax = plt.subplots(len(penalty_list), len(z_dim_list))
+    fig, ax = plt.subplots(len(penalty_list), len(z_dim_list),sharey=True, sharex=True)
     print(ax.shape)
     for i,penalty in enumerate(penalty_list):
         for j,z in enumerate(z_dim_list):
