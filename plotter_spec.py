@@ -61,8 +61,8 @@ for p in range(num_params):
             d = d.item()
             if d['data'].shape[0] == 1:
                 print(int(d['config_ID']), i)
-            D[int(d['config_ID'])].append(d['data'])
-            # D[int(d['config_ID'])].append(d['returns_discounted'])
+            # D[int(d['config_ID'])].append(d['data'])
+            D[int(d['config_ID'])].append(d['returns_discounted'])
             
             D_time[int(d['config_ID'])].append(d['data_wall_time'])
             
@@ -107,7 +107,7 @@ Times = []
 
 R_mean_lsit = []
 R_std_list = []
-MAX_TIME = 14400
+MAX_TIME = 108000
 for i,d in enumerate(D):
     #print(d.shape)
     # d = np.concatenate(list(d),axis=1)
@@ -133,6 +133,7 @@ for i,d in enumerate(D):
     R_std_smoothed = np.convolve(R_std, np.ones(w), 'valid') / w
     R_smoothed = np.convolve(R_mean, np.ones(w), 'valid') / w
     N_ind = np.isnan(R_smoothed).argmax()
+    N_ind = min(400, N_ind)
     final_perf.append(R_smoothed[N_ind-1])
     final_er.append(R_std_smoothed[N_ind-1])
     
