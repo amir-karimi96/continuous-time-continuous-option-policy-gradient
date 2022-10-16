@@ -38,6 +38,47 @@ class sub_policy:
         # print(np.matmul(phi, params.T).reshape(-1) , A, t, duration)
         return np.matmul(phi, params.T).reshape(-1)
 
+    def linear_rbf_1sec(self, A, t, duration):
+        duration = 1.0
+        n_features = self.n_features
+
+        params = A.reshape(self.low_level_action_dim, n_features)
+        
+        h = (1. + 1 / n_features) / n_features 
+        h = h ** 2 * 0.5
+
+        bandwidths = np.repeat([h], n_features, axis=0)
+        centers = np.linspace(0 - 0.5 / n_features, 1 + 0.5 / n_features, n_features)
+        
+        phi = rbf(centers, bandwidths)([t/duration])
+        # print(phi.shape)
+        # return np.matmul(phi, np.ones((5,1))) 
+        # print(np.matmul(phi, params.T).shape)
+        # print(np.matmul(phi, params.T).reshape(-1) , A, t, duration)
+        return np.matmul(phi, params.T).reshape(-1)
+
+    def linear_rbf_05sec(self, A, t, duration):
+        duration = 0.5
+        n_features = self.n_features
+
+        params = A.reshape(self.low_level_action_dim, n_features)
+        
+        h = (1. + 1 / n_features) / n_features 
+        h = h ** 2 * 0.5
+
+        bandwidths = np.repeat([h], n_features, axis=0)
+        centers = np.linspace(0 - 0.5 / n_features, 1 + 0.5 / n_features, n_features)
+        
+        phi = rbf(centers, bandwidths)([t/duration])
+        # print(phi.shape)
+        # return np.matmul(phi, np.ones((5,1))) 
+        # print(np.matmul(phi, params.T).shape)
+        # print(np.matmul(phi, params.T).reshape(-1) , A, t, duration)
+        return np.matmul(phi, params.T).reshape(-1)
+
+    
+
+
 def test(f):
     print(f(A = np.array([-1.1,-0.9,-1,-1,-1]), t= i, duration = 100))
 
