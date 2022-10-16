@@ -5,7 +5,9 @@ from gym.envs.classic_control import Continuous_MountainCarEnv
 import matplotlib.pyplot as plt
 import gym
 from gym.envs.mujoco import HalfCheetahEnv, HopperEnv
-
+from dm_control import suite
+from dm_control.suite import ball_in_cup
+from sub_policies import sub_policy
 try:
     import franka_gym
 
@@ -18,14 +20,15 @@ except:
     pass
 class CT_dm:
     def __init__(self, dt = 0.01) -> None:
-        self.env = suite.load(domain_name="ball_in_cup", task_name="catch")
+        self.env = suite.load(domain_name="ball_in_cup", task_name="catch", environment_kwargs={'control_timestep': dt})
+        
         self.observation_space = spaces.Box(low=-2., high=2., shape=(8,), dtype=np.float32)
         action_spec = self.env.action_spec()
         self.action_space = spaces.Box(low=action_spec.minimum, high=action_spec.maximum, shape=action_spec.shape, dtype=np.float32)
 
         self.DT = dt
         self.dt = dt
-        self.episode_length = int(10 / dt) 
+        self.episode_length = int(20 / dt) 
         self.counter = 0
 
     def reset(self):
@@ -37,7 +40,7 @@ class CT_dm:
         time_step = self.env.reset()
         # time_step.reward, time_step.discount, time_step.observation
         obs = np.concatenate((time_step.observation['position'], time_step.observation['velocity']))
-
+        
         return obs
 
     def step(self, action,d=None):
@@ -59,7 +62,60 @@ class CT_dm:
             if done:
                 info['TimeLimit.truncated'] = False
         return obs, reward, done, info
+    def seed(self, i):
+        pass
+    def render(self, mode):
+        return self.env.physics.render()
 
+class CT_hopper_dm:
+    def __init__(self, dt = 0.01) -> None:
+        self.env = suite.load(domain_name="hopper", task_name="hop", environment_kwargs={'control_timestep': dt})
+        #self.env = suite.load(domain_name="hopper", task_name="hop", task_kwargs={'random':0}, environment_kwargs={'control_timestep': dt})
+        self.observation_space = spaces.Box(low=-2., high=2., shape=(15,), dtype=np.float32)
+        action_spec = self.env.action_spec()
+        self.action_space = spaces.Box(low=action_spec.minimum, high=action_spec.maximum, shape=action_spec.shape, dtype=np.float32)
+
+        self.DT = dt
+        self.dt = dt
+        self.episode_length = int(20 / dt) 
+        self.counter = 0
+        print(self.episode_length)
+
+    def reset(self):
+        # self.dt = self.DT
+        self.counter = 0
+        self.ep_time = 0
+        # self.DT = 0.04
+        self.dt = self.DT
+        time_step = self.env.reset()
+        # time_step.reward, time_step.discount, time_step.observation
+        obs = np.concatenate((time_step.observation['position'], time_step.observation['velocity'], time_step.observation['touch']))
+
+        return obs
+
+    def step(self, action,d=None):
+        self.counter +=1 
+        # action[-1] = 1
+        # print(action)
+        time_step = self.env.step(action)
+        # time_step.reward, time_step.discount, time_step.observation
+        # print(time_step.observation)
+        obs = np.concatenate((time_step.observation['position'], time_step.observation['velocity'], time_step.observation['touch']))
+        reward = time_step.reward
+        info = {}
+        done = time_step.last()
+        # reward = reward / self.DT
+        if self.counter == self.episode_length:
+            done = True
+            info['TimeLimit.truncated'] = True
+        else:
+            if done:
+                info['TimeLimit.truncated'] = False
+        return obs, reward, done, info
+    def seed(self,i):
+        pass
+    def render(self, mode):
+        return self.env.physics.render()
 
 
 class CT_half_cheetah:
@@ -102,6 +158,9 @@ class CT_half_cheetah:
     def seed(self, i):
         self.env.seed(i)
 
+    def render(self, mode):
+        return self.env.render(mode)
+
 class CT_hopper:
     def __init__(self, dt=0.008) -> None:
         self.env = HopperEnv()
@@ -142,6 +201,9 @@ class CT_hopper:
         return self.env.reset()
     def seed(self, i):
         self.env.seed(i)
+
+    def render(self, mode):
+        return self.env.render(mode)
 
 
 
@@ -372,14 +434,14 @@ class CT_pendulum_sparse(PendulumEnv):
         return s, r_sparse, done, info
         
 class CT_sine:
-    def __init__(self,dt = 0.05) -> None:
+    def __init__(self,dt = 0.01) -> None:
         
         self.action_space = spaces.Box(low=-1., high=1., shape=(1,), dtype=np.float32)
         self.observation_space = spaces.Box(low=-1., high=1., shape=(2,), dtype=np.float32)
-        self.DT = 0.05
-        self.dt = 0.05
+        self.DT = 0.01
+        self.dt = 0.01
         self.list = []
-        self.episode_length = 20
+        self.episode_length = 100
         self.counter = 0
         
 
@@ -388,12 +450,12 @@ class CT_sine:
         self.counter = 0
         self.ep_time = 0
         self.list = []
-        self.DT = 0.05
-        self.dt = 0.05
+        self.DT = 0.01
+        self.dt = 0.01
         self.F = 1 #np.random.random()/2+0.5
         self.A = 1#np.random.random()/2 + 0.5
         self.phi = np.random.random() * np.pi
-        x = np.linspace(0,1,20)
+        x = np.linspace(0,1,self.episode_length)
         self.traj = self.A * np.sin(2 * np.pi * x * self.F + self.phi)
         return np.array([self.phi, 0.])
 
@@ -407,10 +469,10 @@ class CT_sine:
             # print(np.array(self.list).shape)
             error = np.abs((np.array(self.list) - self.traj)**2).mean(axis=-1)#/(self.A**2)
             # print(error)
-            if error < 0.25:
-                reward = 1/self.dt
-                # plt.plot(self.list)
-                # plt.savefig('sine.png')
+            # if error < 0.25:
+            #     reward = 1/self.dt
+            # plt.plot(self.list)
+            # plt.savefig('sine.png')
                 #print(np.array(self.list) - self.traj)
             # reward = -error/self.dt
 
@@ -424,6 +486,8 @@ class CT_sine:
             if done:
                 info['TimeLimit.truncated'] = False
         return np.array([self.phi, self.counter/ self.episode_length]), reward, done, info
+    def seed(self,i):
+        pass
 
 class CT_sine_vel:
     def __init__(self,dt = 0.05) -> None:
@@ -610,7 +674,8 @@ class D2C:
         R = 0
         Info = {'rewards':[],
                 'durations': [],
-                'frames': []
+                'frames': [],
+                'actions': [],
                 }
         done = False
         # duration = max(duration ,self.dt)
@@ -625,6 +690,7 @@ class D2C:
             if self.eval_mode:
                 f = self.env.render(mode='rgb_array')
                 Info['frames'].append(f)
+                Info['actions'].append(a)
             R += self.get_continuous_reward(r, i * self.dt, self.dt) 
             Info['rewards'].append(r)
             Info['durations'].append(self.dt)
@@ -640,6 +706,7 @@ class D2C:
                 if self.eval_mode:
                     f = self.env.render(mode='rgb_array')
                     Info['frames'].append(f)
+                    Info['actions'].append(a)
                 R += self.get_continuous_reward(r, integration_steps * self.dt, d)
                 Info['rewards'].append(r)
                 Info['durations'].append(d)
@@ -656,9 +723,9 @@ class CT_stochastic_env:
         self.dt = dt
         self.episode_length = int(1./dt)
         self.counter = 0
-        self.change_goal_prob = 1./(1.+0.3/dt)
+        self.change_goal_prob = 1./(1.+0.5/dt)
         
-        
+
     def reset(self):
         # self.dt = self.DT
         self.counter = 0
@@ -694,19 +761,15 @@ class CT_stochastic_env:
             if done:
                 info['TimeLimit.truncated'] = False
         return self.state, reward, done, info
-
+    def seed(self, i):
+        pass
 
 if __name__ == '__main__':
-    env = CT_hopper(dt = 0.008)
-    env2 = gym.make('Hopper-v2')
-    env2.seed(0)
-    env.seed(0)
+    env = CT_hopper_dm(dt = 0.01)
+    
     s= env.reset()
-    env2.reset()
-    for i in range(10):
+    for i in range(1000):
         a = env.action_space.sample()
         s1,r1,done, info = env.step(a)
-        s2,r2,done, info = env2.step(a)
-        print(s1-s2,r1-r2)
-    # print(A, F)
+        # env.env.physics.render()
     
