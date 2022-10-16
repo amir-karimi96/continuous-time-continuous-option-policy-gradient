@@ -50,7 +50,7 @@ param = config['param']
 config_name = 'config_{}'.format(config['param_ID'])
 
 env = globals()[param['env']](dt=param['env_dt'])
-env.seed(0)
+env.seed(run_ID * 1000)
 config['state_dim'] = len(env.observation_space.sample())
 action_dim = len(env.action_space.sample())
 config['action_high'] = env.action_space.high
@@ -113,13 +113,18 @@ def log_data(data):
                 
                 for k, v in stat_dict.items():
                     writer.add_scalar(k, v, data['total_steps'])
+        else:
+            stat_dict = data['agent_data']
+            if data['agent_data'] is not None: 
+                for k, v in stat_dict.items():
+                    writer.add_scalar(k, v, data['total_steps'])
             
     
     if data['done']:
         
         Returns.append((np.array(data['undiscounted_rewards']) * np.array(data['durations'])).sum())
         discounts = np.exp(-agent.rho) ** np.matmul(np.array(data['durations']), 1-np.tri(len(data['durations']), len(data['durations'])))
-        #print(discounts)
+        
         Returns_discounted.append((np.array(data['undiscounted_rewards']) * np.array(data['durations']) * discounts).sum())
         Returns_times.append(environment_real_time)
         if param['log_level'] >= 1:
@@ -150,7 +155,7 @@ if __name__ == '__main__':
     if param['async']:
         agent.update_process.start()
     max_experiment_time = param['max_experiment_time']
-    
+    agent_data = None
     while environment_real_time < max_experiment_time:
         
         undiscounted_rewards = []
@@ -213,12 +218,13 @@ if __name__ == '__main__':
                         # print('here: ', start_update_time, environment_real_time)
                     # print((environment_real_time - start_update_time))
                     while agent.total_updates < config['param']['update_rate'] * (environment_real_time - start_update_time):
-                        agent.update()
+                        agent_data = agent.update()
                         # print(agent.total_updates)
                 # print(environment_real_time,  program_real_time)
 
             # log data
-            data = {'D': D.detach().numpy(),
+            data = {'agent_data': agent_data,
+            'D': D.detach().numpy(),
             'D_sigma': predictions['D_sigma'].detach().numpy(),
             'total_steps': agent.total_steps,
             'total_episodes': agent.total_episodes,

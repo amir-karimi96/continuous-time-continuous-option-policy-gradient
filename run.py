@@ -131,7 +131,6 @@ def log_data(data):
                 for k, v in stat_dict.items():
                     writer.add_scalar(k, v, data['total_steps'])    
     
-    
     if data['done']:
         
         Returns.append((np.array(data['undiscounted_rewards']) * np.array(data['durations'])).sum())
@@ -142,7 +141,11 @@ def log_data(data):
         Returns_times.append(environment_real_time)
         if param['log_level'] >= 1:
             writer.add_scalar('Return_discrete', Returns[-1], data['total_episodes'])
-
+            if data['total_episodes'] % param['save_interval'] == 0:
+                D_values = agent.RB.get_full()['D'][-500:].reshape(-1)
+                # print(D_values)
+                writer.add_histogram('Duration hist', D_values, global_step = agent.total_steps)
+    
         if data['total_episodes'] % param['save_interval'] == 0:
             # print('{} steps/s'.format(agent.total_steps//(time.time()-t0)))
             log_data['data'] = np.array(Returns)
