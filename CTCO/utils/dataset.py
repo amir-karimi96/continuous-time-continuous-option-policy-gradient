@@ -2,7 +2,7 @@ import numpy as np
 from typing import Dict
 
 # from herl.config import np_type
-from dict_serializable import DictSerializable
+from CTCO.utils.dict_serializable import DictSerializable
 np_type = np.float64
 
 class Variable:

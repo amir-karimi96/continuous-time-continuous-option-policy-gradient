@@ -6,15 +6,15 @@ import torch.multiprocessing as mp
 import os
 import argparse
 import yaml
-from sub_policies import sub_policy
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
+from CTCO.utils.sub_policies import sub_policy
+from CTCO.utils.env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
 from torch.utils.tensorboard import SummaryWriter
-from agents import *
+from CTCO.agents.agents import *
 try:
     import rlbench.gym
 except:
     pass
-from franka_env import *
+from CTCO.utils.franka_env import *
 
 if __name__ == '__main__':
     

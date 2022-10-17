@@ -1,4 +1,4 @@
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car,CT_close_drawer
+from CTCO.utils.env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car,CT_close_drawer
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.animation as animation
@@ -13,8 +13,8 @@ import imageio
 import matplotlib as mpl
 import matplotlib.cm as cm
 import numpy as np
-from sub_policies import sub_policy
-from agents import *
+from CTCO.utils.sub_policies import sub_policy
+from CTCO.agents.agents import *
 from multiprocessing import Queue
 try:
     import rlbench.gym

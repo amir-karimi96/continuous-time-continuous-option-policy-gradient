@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-# =============================================================================
-# Created By  : Jun Jin
-# Created Date: Thu May 14 MDT 2020
-# Revised Date: N/A
-# =============================================================================
-"""
-utils functions
-Copyright (c) 2019, Huawei Canada Inc.
-All rights reserved.
-"""
+
 
 import os
 from gym.logger import error

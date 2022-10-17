@@ -1,4 +1,4 @@
-from env_wrapper import  CT_pendulum, D2C
+from CTCO.utils.env_wrapper import  CT_pendulum, D2C
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.animation as animation

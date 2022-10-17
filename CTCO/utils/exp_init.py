@@ -1,10 +1,7 @@
-from math import exp
-from numpy.core import numeric
 import yaml
 import os
 from pathlib import Path
 from itertools import product
-import numpy as np
 import argparse
 
 parser = argparse.ArgumentParser()

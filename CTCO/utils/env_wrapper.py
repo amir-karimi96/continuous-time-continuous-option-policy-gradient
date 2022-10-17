@@ -7,17 +7,15 @@ import gym
 from gym.envs.mujoco import HalfCheetahEnv, HopperEnv
 from dm_control import suite
 from dm_control.suite import ball_in_cup
-from sub_policies import sub_policy
+from CTCO.utils.sub_policies import sub_policy
 try:
     import franka_gym
-
-
-
     import gym
     from dm_control import suite
     from dm_control.suite import ball_in_cup
 except:
     pass
+
 class CT_dm:
     def __init__(self, dt = 0.01) -> None:
         self.env = suite.load(domain_name="ball_in_cup", task_name="catch", environment_kwargs={'control_timestep': dt})

@@ -1,4 +1,3 @@
-from json import load
 import torch
 import time
 import numpy as np
@@ -7,15 +6,15 @@ import torch.multiprocessing as mp
 import os
 import argparse
 import yaml
-from sub_policies import sub_policy
-from env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
+from CTCO.utils.sub_policies import sub_policy
+from CTCO.utils.env_wrapper import  D2C, Env_test, CT_pendulum, CT_pendulum_sparse,CT_mountain_car
 from torch.utils.tensorboard import SummaryWriter
-from agents import *
+from CTCO.agents.agents import *
 try:
     import rlbench.gym
 except:
     pass
-from franka_env import *
+from CTCO.utils.franka_env import *
 
 if __name__ == '__main__':
     
@@ -76,7 +75,7 @@ if __name__ == '__main__':
     config['image_shape'] = env.image_space.shape
     config['net_params'] = net_params
     config['device'] = device
-    config['load_path'] = load_model
+
     if param['log_level'] >= 1:
         while True:
             time.sleep(run_ID / 10)
@@ -93,8 +92,6 @@ if __name__ == '__main__':
         agent = globals()[param['agent']](config, RB_sample_queue, agent_info_queue)
     else:
         agent = globals()[param['agent']](config)
-    # print(load_model)
-    # agent.load_actor(load_model)
 
     low_level_function = sub_policy(low_level_function_choice = param['low_level_function'], low_level_action_dim = action_dim, n_features=int(param['z_dim']//action_dim)).low_level_function
     num_ep = 500
@@ -132,12 +129,12 @@ if __name__ == '__main__':
             #                                 }, agent.total_steps, walltime=agent.real_t)
             writer.add_scalar('Reward', data['Reward'], data['total_steps'])
         
-            # if param['async']:    
-            #     if agent_info_queue.full():
-            #         stat_dict = agent_info_queue.get()
+            if param['async']:    
+                if agent_info_queue.full():
+                    stat_dict = agent_info_queue.get()
                     
-            #         for k, v in stat_dict.items():
-            #             writer.add_scalar(k, v, data['total_steps'])
+                    for k, v in stat_dict.items():
+                        writer.add_scalar(k, v, data['total_steps'])
                 
         
         
@@ -150,11 +147,11 @@ if __name__ == '__main__':
             Returns_times.append(environment_real_time)
             if param['log_level'] >= 1:
                 writer.add_scalar('Return_discrete', Returns[-1], data['total_episodes'])
-                # if data['total_episodes'] % param['save_interval'] == 0:
-                #     if agent.RB.real_size > 0:
-                #         D_values = agent.RB.get_full()['D'][-500:].reshape(-1)
-                #         # print(D_values)
-                #         writer.add_histogram('Duration hist', D_values, global_step = agent.total_steps)
+                if data['total_episodes'] % param['save_interval'] == 0:
+                    if agent.RB.real_size > 0:
+                        D_values = agent.RB.get_full()['D'][-500:].reshape(-1)
+                        # print(D_values)
+                        writer.add_histogram('Duration hist', D_values, global_step = agent.total_steps)
     
             if data['total_episodes'] % param['save_interval'] == 0:
                 # print('{} steps/s'.format(agent.total_steps//(time.time()-t0)))
@@ -172,7 +169,8 @@ if __name__ == '__main__':
     environment_real_time = 0
     program_real_time = 0
     start_time = time.time()
-    
+    if param['async']:
+        agent.update_process.start()
     max_experiment_time = param['max_experiment_time']
     
     while environment_real_time < max_experiment_time:
@@ -194,10 +192,9 @@ if __name__ == '__main__':
             
             predictions = agent.actor_network(S, S_image)
             # print(device)
-            print(predictions['z_mu'], predictions['D_mu'])
             # sample z and duration
-            z, _ = agent.get_action_z(predictions['z_mu'],  predictions['z_sigma'])
-            D, _ = agent.get_duration(predictions['D_mu'],  predictions['D_sigma'])
+            z, _ = agent.get_action_z(predictions['z_mu'], predictions['z_sigma'])
+            D, _ = agent.get_duration(predictions['D_mu'], predictions['D_sigma'])
             
             # set step duration to duration
             d = D.detach().cpu().numpy()[0]
@@ -231,15 +228,15 @@ if __name__ == '__main__':
                         'z':z.detach().cpu().numpy(), 
                         'D':D.detach().cpu().numpy(), 'd':d}
 
-            # add_data_to_RB(sample)
+            add_data_to_RB(sample)
 
             # update info for undiscounted return computation
             undiscounted_rewards.extend(info['rewards'])
             durations.extend(info['durations'])
             
             # update agent if async
-            # if param['async']==False:
-            #     agent.update()
+            if param['async']==False:
+                agent.update()
 
             # log data
             data = {'D': D.detach().cpu().numpy(),
@@ -261,4 +258,6 @@ if __name__ == '__main__':
             S_image.unsqueeze_(0)
             S = torch.FloatTensor(sp['state']).to(device)
             S.unsqueeze_(0)
-
+    
+    # env.terminate()
+    print('Experiment done!')
