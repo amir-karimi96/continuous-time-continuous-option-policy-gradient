@@ -1,4 +1,4 @@
 # continuous-time-continuous-option-policy-gradient
 
 # Video of the algorithm in action can be found here
-[![IMAGE ALT TEXT HERE]()](https://photos.app.goo.gl/iBAu5KFyC2Zez4kf9)
+[![IMAGE ALT TEXT HERE]()](https://drive.google.com/file/d/1To3a9e2yLDT6hiJvGhnFA_65emc3vjZw/view?usp=share_link)
