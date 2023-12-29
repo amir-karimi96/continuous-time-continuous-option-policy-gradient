@@ -1,5 +1,5 @@
 # continuous-time-continuous-option-policy-gradient
-This repository contains the implementation for the continuous time continuous opiton (CTCO) policy gradient algorithm. In this algorithm, extended actions paired with duraiton of execution are chosen to construct options with open-loop policies to improve the exploraiton in continuous control tasks. The trajectory of low-level actions are parameterized by some $\omega$ and executed for continuous time $d$ independent of the task action-cycle-time $\Delta t$.
+This repository contains the implementation for the Continuous Time Continuous Option (CTCO) Policy Gradient Algorithm. In this algorithm, extended actions paired with duration of execution are chosen to construct options with open-loop policies to improve the exploration in continuous control tasks. The trajectory of low-level actions is parameterized by some $\omega$ and executed for continuous time $d$ independent of the task action-cycle time $\Delta t$
 
 ![](CTCO/high_level_MDP.png)
 
@@ -8,7 +8,7 @@ This repository contains the implementation for the continuous time continuous o
 CTCO is evaluated against classic RL (SAC), action repetition RL (FIGAR-SAC) and hierarchical RL (DAC) methods for simulated continuous control tasks in different interaction frequencies.
 ![plot](CTCO/result_freq_analysis_img.jpg)
 
-We have also evaluated the CTCO performance in the  real-world task of visual reacher with Faranka robotic arm.
+We have also evaluated the CTCO performance in the real-world task of visual reacher with Faranka robotic arm.
 
 <p float="left">
   <img src="CTCO/iros_franka_sparse_CTCO.jpg" width="400" />
