@@ -1,7 +1,7 @@
 # continuous-time-continuous-option-policy-gradient
 This repository contains the implementation for the Continuous Time Continuous Option (CTCO) Policy Gradient Algorithm. In this algorithm, extended actions paired with duration of execution are chosen to construct options with open-loop policies to improve the exploration in continuous control tasks. The trajectory of low-level actions is parameterized by some $\omega$ and executed for continuous time $d$ independent of the task action-cycle time $\Delta t$
 
-![](CTCO/high_level_MDP.png)
+![](CTCO/IROS2023_Graphical_Abstract.jpg)
 
 
 # Results
