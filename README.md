@@ -19,4 +19,4 @@ We have also evaluated the CTCO performance in the real-world task of visual rea
   <img src="CTCO/iros_franka_sparse_SAC.jpg" width="400" />  
 </p>
 
-# Video of the algorithm in action can be found [here](https://drive.google.com/file/d/1To3a9e2yLDT6hiJvGhnFA_65emc3vjZw/view?usp=share_link)
+# Video of the algorithm in action can be found [here](https://drive.google.com/file/d/18W6ULtbuZJ7vfKOG0JiVzzDBA5MipFhi/view?usp=share_link)
